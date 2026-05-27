@@ -12,13 +12,24 @@
  * `retryWithBackoff` accepts injectable `sleep` and `random`, so no real
  * timers are used and every test is deterministic.
  */
+
+process.on("unhandledRejection", (e) => console.error("UNHANDLED:", e));
 import { describe, it, expect, vi } from "vitest";
+
+import * as contractsMod from "@/lib/backend/services/contracts";
+console.log("CONTRACTS MODULE KEYS:", Object.keys(contractsMod));
+console.log("retryWithBackoff:", typeof contractsMod.retryWithBackoff);
 
 // The contracts service imports cache / counters / config / logger at module
 // load. None of that is exercised by these unit tests, so the modules are
 // stubbed to keep the test hermetic and free of I/O.
+vi.mock("ioredis", () => ({ default: class {} }));
 vi.mock("@/lib/backend/cache/factory", () => ({
-  cache: { get: vi.fn(), set: vi.fn(), delete: vi.fn() },
+  cache: {
+    get: vi.fn(async () => null),
+    set: vi.fn(async () => {}),
+    delete: vi.fn(async () => {}),
+  },
 }));
 vi.mock("@/lib/backend/counters/provider", () => ({
   getCountersAdapter: () => ({
@@ -27,12 +38,23 @@ vi.mock("@/lib/backend/counters/provider", () => ({
   }),
 }));
 vi.mock("@/lib/backend/config", () => ({
-  getBackendConfig: () => ({}),
+  getBackendConfig: () => ({
+    sorobanRpcUrl: "https://example.invalid",
+    networkPassphrase: "TEST",
+    contractAddresses: { commitmentCore: "", attestationEngine: "" },
+  }),
 }));
 vi.mock("@/lib/backend/logger", () => ({
   logInfo: vi.fn(),
   logWarn: vi.fn(),
   logError: vi.fn(),
+}));
+vi.mock("@/lib/backend/cache/index", () => ({
+  CacheKey: {
+    commitment: (id: string) => `commitment:${id}`,
+    userCommitments: (a: string) => `user-commitments:${a}`,
+  },
+  CacheTTL: { COMMITMENT_DETAIL: 60, USER_COMMITMENTS: 60 },
 }));
 
 // NOTE: @/lib/backend/errors is intentionally NOT mocked — the classifier
