@@ -81,7 +81,7 @@ fn create_and_fund_locks_funds() {
 }
 
 #[test]
-fn release_after_maturity_returns_principal() {
+fn release_after_maturity_pays_principal_plus_yield() {
     let f = setup();
     let owner = Address::generate(&f.env);
     fund_owner(&f, &owner, 1_000);
@@ -90,12 +90,36 @@ fn release_after_maturity_returns_principal() {
         .create_commitment(&owner, &f.asset, &1_000, &RiskProfile::Safe, &10, &200);
     f.client.fund_escrow(&id);
 
+    let admin_deposit = 10;
+    f.token_admin.mint(&f.admin, &admin_deposit);
+    f.client.deposit_yield_pool(&f.admin, &admin_deposit);
+
     // Advance ledger time past maturity.
     f.env.ledger().set_timestamp(11 * 86_400);
     let paid = f.client.release(&id, &owner);
-    assert_eq!(paid, 1_000);
-    assert_eq!(f.token.balance(&owner), 1_000);
-    assert_eq!(f.client.get_commitment(&id).status, EscrowStatus::Released);
+
+    let commitment = f.client.get_commitment(&id);
+    assert_eq!(commitment.accrued_yield, 1);
+    assert_eq!(paid, 1_001);
+    assert_eq!(f.token.balance(&owner), 1_001);
+    assert_eq!(f.token.balance(&f.admin), 0);
+    assert_eq!(f.client.get_yield_pool_balance(), 9);
+    assert_eq!(commitment.status, EscrowStatus::Released);
+}
+
+#[test]
+fn release_without_yield_pool_fails() {
+    let f = setup();
+    let owner = Address::generate(&f.env);
+    fund_owner(&f, &owner, 1_000);
+    let id = f
+        .client
+        .create_commitment(&owner, &f.asset, &1_000, &RiskProfile::Safe, &10, &200);
+    f.client.fund_escrow(&id);
+
+    f.env.ledger().set_timestamp(11 * 86_400);
+    let res = f.client.try_release(&id, &owner);
+    assert_eq!(res, Err(Ok(Error::InsufficientYieldPool)));
 }
 
 #[test]

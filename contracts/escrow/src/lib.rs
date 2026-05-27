@@ -34,6 +34,8 @@ pub enum DataKey {
     OwnerIndex(Address),
     /// Protocol fee recipient.
     FeeRecipient,
+    /// Yield pool balance available to pay matured commitment yield.
+    YieldPool,
 }
 
 /// Risk profile chosen at creation time. Determines the early-exit penalty
@@ -70,6 +72,7 @@ pub struct Commitment {
     pub owner: Address,
     pub asset: Address,
     pub amount: i128,
+    pub accrued_yield: i128,
     pub risk: RiskProfile,
     pub status: EscrowStatus,
     /// Ledger timestamp (seconds) at which the commitment may be released.
@@ -96,10 +99,25 @@ pub enum Error {
     NotMatured = 7,
     InvalidDuration = 8,
     PenaltyTooHigh = 9,
+    InsufficientYieldPool = 10,
 }
 
 const MAX_PENALTY_BPS: u32 = 10_000;
 const SECONDS_PER_DAY: u64 = 86_400;
+const YIELD_BPS_DENOMINATOR: i128 = 3_650_000; // 365 days * 10_000 bps
+
+fn yield_rate_bps(risk: RiskProfile) -> u32 {
+    match risk {
+        RiskProfile::Safe => 500,
+        RiskProfile::Balanced => 700,
+        RiskProfile::Aggressive => 1_000,
+    }
+}
+
+fn calculate_accrued_yield(amount: i128, duration_days: u32, risk: RiskProfile) -> i128 {
+    let rate_bps = yield_rate_bps(risk) as i128;
+    (amount * rate_bps * duration_days as i128) / YIELD_BPS_DENOMINATOR
+}
 
 #[contract]
 pub struct EscrowContract;
@@ -158,11 +176,13 @@ impl EscrowContract {
         let now = env.ledger().timestamp();
         let maturity = now + (duration_days as u64) * SECONDS_PER_DAY;
 
+        let accrued_yield = calculate_accrued_yield(amount, duration_days, risk);
         let commitment = Commitment {
             id,
             owner: owner.clone(),
             asset,
             amount,
+            accrued_yield,
             risk,
             status: EscrowStatus::Created,
             maturity,
@@ -207,6 +227,34 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Deposit yield tokens into the contract's dedicated yield pool.
+    /// Only the admin may fund the pool used to pay matured commitment yield.
+    pub fn deposit_yield_pool(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
+        Self::require_init(&env)?;
+        admin.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let token = Self::token_client(&env);
+        let contract = env.current_contract_address();
+        token.transfer(&admin, &contract, &amount);
+
+        let balance = Self::yield_pool_balance(&env);
+        Self::set_yield_pool_balance(&env, balance + amount);
+
+        env.events().publish(
+            (Symbol::new(&env, "deposit_yield_pool"), admin),
+            (amount, balance + amount),
+        );
+        Ok(())
+    }
+
+    /// Read the current yield pool balance available to pay matured commitment yield.
+    pub fn get_yield_pool_balance(env: Env) -> i128 {
+        Self::yield_pool_balance(&env)
+    }
+
     /// Release the escrowed funds back to the owner once the commitment has
     /// matured. Only callable on a `Funded` commitment at/after maturity.
     pub fn release(env: Env, commitment_id: u64, caller: Address) -> Result<i128, Error> {
@@ -221,17 +269,25 @@ impl EscrowContract {
             return Err(Error::NotMatured);
         }
 
-        let token = Self::token_client(&env);
-        token.transfer(&env.current_contract_address(), &c.owner, &c.amount);
+        let yield_pool = Self::yield_pool_balance(&env);
+        if yield_pool < c.accrued_yield {
+            return Err(Error::InsufficientYieldPool);
+        }
 
+        let total_payout = c.amount + c.accrued_yield;
+        let token = Self::token_client(&env);
+        let contract = env.current_contract_address();
+        token.transfer(&contract, &c.owner, &total_payout);
+
+        Self::set_yield_pool_balance(&env, yield_pool - c.accrued_yield);
         c.status = EscrowStatus::Released;
         Self::save(&env, &c);
 
         env.events().publish(
             (Symbol::new(&env, "release"), c.owner.clone()),
-            (commitment_id, c.amount),
+            (commitment_id, total_payout, c.accrued_yield),
         );
-        Ok(c.amount)
+        Ok(total_payout)
     }
 
     /// Early-exit refund. Returns the principal minus the early-exit penalty;
@@ -322,9 +378,18 @@ impl EscrowContract {
         let contract = env.current_contract_address();
         let paid;
         if release_to_owner {
-            token.transfer(&contract, &c.owner, &c.amount);
+            let mut payout = c.amount;
+            if env.ledger().timestamp() >= c.maturity {
+                let yield_pool = Self::yield_pool_balance(&env);
+                if yield_pool < c.accrued_yield {
+                    return Err(Error::InsufficientYieldPool);
+                }
+                payout += c.accrued_yield;
+                Self::set_yield_pool_balance(&env, yield_pool - c.accrued_yield);
+            }
+            token.transfer(&contract, &c.owner, &payout);
             c.status = EscrowStatus::Released;
-            paid = c.amount;
+            paid = payout;
         } else {
             let penalty = (c.amount * c.penalty_bps as i128) / MAX_PENALTY_BPS as i128;
             paid = c.amount - penalty;
@@ -416,6 +481,17 @@ impl EscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::OwnerIndex(owner.clone()), &ids);
+    }
+
+    fn yield_pool_balance(env: &Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::YieldPool)
+            .unwrap_or(0)
+    }
+
+    fn set_yield_pool_balance(env: &Env, amount: i128) {
+        env.storage().instance().set(&DataKey::YieldPool, &amount);
     }
 
     fn token_client(env: &Env) -> soroban_sdk::token::Client {
