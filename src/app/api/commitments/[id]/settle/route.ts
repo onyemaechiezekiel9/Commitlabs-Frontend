@@ -46,7 +46,7 @@ export const POST = withApiHandler(async (req: NextRequest, { params }, correlat
   }
 
   const callerAddress = validation.data.callerAddress;
-  const commitment: any = await getCommitmentFromChain(id);
+  const commitment: any = await getCommitmentFromChain(id, { requestId: correlationId });
 
   if (!commitment) {
     throw new NotFoundError('Commitment', { commitmentId: id });
@@ -64,7 +64,7 @@ export const POST = withApiHandler(async (req: NextRequest, { params }, correlat
   const settlementResult = await settleCommitmentOnChain({
     commitmentId: id,
     callerAddress,
-  });
+  }, { requestId: correlationId });
 
   logCommitmentSettled({
     ip,
@@ -83,7 +83,7 @@ export const POST = withApiHandler(async (req: NextRequest, { params }, correlat
       txHash: settlementResult.txHash,
       reference: settlementResult.reference,
       settledAt: new Date().toISOString(),
-    },
+    }, { requestId: correlationId },
     undefined,
     200,
     correlationId,

@@ -36,6 +36,11 @@ export interface CreateCommitmentOnChainParams {
   metadata?: Record<string, unknown>;
 }
 
+export interface LoggingContext {
+  requestId?: string;
+  commitmentId?: string;
+}
+
 export interface ChainCommitment {
   id: string;
   ownerAddress: string;
@@ -86,6 +91,19 @@ export interface SettleCommitmentOnChainResult {
   txHash?: string;
   reference?: string;
   finalStatus: string;
+}
+
+export interface EarlyExitCommitmentOnChainParams {
+  commitmentId: string;
+  callerAddress?: string;
+}
+
+export interface EarlyExitCommitmentOnChainResult {
+  exitAmount: string;
+  penaltyAmount: string;
+  finalStatus: string;
+  txHash?: string;
+  reference?: string;
 }
 
 type ContractCallMode = "read" | "write";
@@ -487,6 +505,7 @@ function validateOwnerAddress(ownerAddress: string): void {
 
 export async function createCommitmentOnChain(
   params: CreateCommitmentOnChainParams,
+  loggingContext?: LoggingContext,
 ): Promise<CreateCommitmentOnChainResult> {
   try {
     validateOwnerAddress(params.ownerAddress);
@@ -527,6 +546,7 @@ export async function createCommitmentOnChain(
 
 export async function getCommitmentFromChain(
   commitmentId: string,
+  loggingContext?: LoggingContext,
 ): Promise<ChainCommitment> {
   try {
     if (!commitmentId) {
@@ -540,10 +560,10 @@ export async function getCommitmentFromChain(
     const cacheKey = CacheKey.commitment(commitmentId);
     const cached = await cache.get<ChainCommitment>(cacheKey);
     if (cached !== null) {
-      logInfo(undefined, "[cache] hit commitment", { commitmentId });
+      logInfo(loggingContext?.requestId, "[cache] hit commitment", { commitmentId });
       return cached;
     }
-    logInfo(undefined, "[cache] miss commitment", { commitmentId });
+    logInfo(loggingContext?.requestId, "[cache] miss commitment", { commitmentId });
 
     const invocation = await invokeContractMethod(
       getContractId("commitmentCore"),
@@ -575,6 +595,7 @@ export async function getCommitmentFromChain(
 
 export async function getUserCommitmentsFromChain(
   ownerAddress: string,
+  loggingContext?: LoggingContext,
 ): Promise<ChainCommitment[]> {
   try {
     validateOwnerAddress(ownerAddress);
@@ -582,10 +603,10 @@ export async function getUserCommitmentsFromChain(
     const cacheKey = CacheKey.userCommitments(ownerAddress);
     const cached = await cache.get<ChainCommitment[]>(cacheKey);
     if (cached !== null) {
-      logInfo(undefined, "[cache] hit user-commitments", { ownerAddress });
+      logInfo(loggingContext?.requestId, "[cache] hit user-commitments", { ownerAddress });
       return cached;
     }
-    logInfo(undefined, "[cache] miss user-commitments", { ownerAddress });
+    logInfo(loggingContext?.requestId, "[cache] miss user-commitments", { ownerAddress });
 
     const contractId = getContractId("commitmentCore");
 
@@ -620,7 +641,7 @@ export async function getUserCommitmentsFromChain(
       ? idsResult.value.map((id) => asString(id)).filter(Boolean)
       : [];
     const commitments = await Promise.all(
-      commitmentIds.map((commitmentId) => getCommitmentFromChain(commitmentId)),
+      commitmentIds.map((commitmentId) => getCommitmentFromChain(commitmentId, loggingContext)),
     );
 
     await cache.set(cacheKey, commitments, CacheTTL.USER_COMMITMENTS);
@@ -637,13 +658,14 @@ export async function getUserCommitmentsFromChain(
       code: "BLOCKCHAIN_CALL_FAILED",
       message: "Unable to fetch user commitments from chain.",
       status: 502,
-      details: { method: "get_user_commitments", ownerAddress },
+      details: { method: "get_user_commitments", ownerAddress, requestId: loggingContext?.requestId },
     });
   }
 }
 
 export async function recordAttestationOnChain(
   params: RecordAttestationOnChainParams,
+  loggingContext?: LoggingContext,
 ): Promise<RecordAttestationOnChainResult> {
   try {
     if (!params.commitmentId) {
@@ -686,6 +708,10 @@ export async function recordAttestationOnChain(
       );
     }
 
+    // Add logging context to payload if needed
+    const eventPayload = { ...params, requestId: loggingContext?.requestId };
+    // (Potentially emit an event here)
+
     return parseAttestationResult(invocation.value, invocation.txHash);
   } catch (error) {
     // Increment chain failures counter on blockchain operation failures
@@ -706,6 +732,7 @@ export async function recordAttestationOnChain(
 
 export async function settleCommitmentOnChain(
   params: SettleCommitmentOnChainParams,
+  loggingContext?: LoggingContext,
 ): Promise<SettleCommitmentOnChainResult> {
   try {
     if (!params.commitmentId) {
@@ -717,7 +744,7 @@ export async function settleCommitmentOnChain(
     }
 
     // First, get the commitment to check if it's matured
-    const commitment = await getCommitmentFromChain(params.commitmentId);
+    const commitment = await getCommitmentFromChain(params.commitmentId, loggingContext);
 
     // Check if commitment is matured (expired or can be settled)
     if (commitment.status === "SETTLED") {
@@ -790,13 +817,15 @@ export async function settleCommitmentOnChain(
       details: {
         method: "settle_commitment",
         commitmentId: params.commitmentId,
+        requestId: loggingContext?.requestId,
       },
     });
   }
 }
 
 export async function earlyExitCommitmentOnChain(
-  params: EarlyExitCommitmentOnChainParams
+  params: EarlyExitCommitmentOnChainParams,
+  loggingContext?: LoggingContext,
 ): Promise<EarlyExitCommitmentOnChainResult> {
   try {
     if (!params.commitmentId) {
@@ -807,7 +836,7 @@ export async function earlyExitCommitmentOnChain(
       });
     }
 
-    const commitment = await getCommitmentFromChain(params.commitmentId);
+    const commitment = await getCommitmentFromChain(params.commitmentId, loggingContext);
 
     if (commitment.status === 'SETTLED') {
       throw new BackendError({

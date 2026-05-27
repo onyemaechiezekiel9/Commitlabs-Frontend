@@ -55,7 +55,7 @@ export const GET = withApiHandler(async (req: NextRequest, _context, correlation
     throw new TooManyRequestsError();
   }
 
-  const commitments = await getUserCommitmentsFromChain(ownerAddress);
+  const commitments = await getUserCommitmentsFromChain(ownerAddress, { requestId: correlationId });
   let mapped = commitments.map((c: any) => ({
     commitmentId: String(c.id ?? c.commitmentId),
     ownerAddress: c.ownerAddress,
@@ -128,7 +128,7 @@ export const POST = withApiHandler(async (req: NextRequest, _context, correlatio
     durationDays,
     maxLossBps,
     metadata,
-  });
+  }, { requestId: correlationId });
 
   return ok(result, undefined, 201, correlationId);
 }, { cors: COMMITMENTS_CORS_POLICY });
