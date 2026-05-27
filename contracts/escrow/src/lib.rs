@@ -502,7 +502,7 @@ impl EscrowContract {
             return Err(Error::InvalidState);
         }
 
-        let penalty = (c.amount * c.penalty_bps as i128) / MAX_PENALTY_BPS as i128;
+        let penalty = (c.amount * i128::from(c.penalty_bps)) / i128::from(MAX_PENALTY_BPS);
         let refund_amount = c.amount - penalty;
 
         // Effects: Update state before interactions to prevent reentrancy
@@ -640,6 +640,12 @@ impl EscrowContract {
             paid = payout;
 >>>>>>> master
         } else {
+<<<<<<< feat/soroban-rpc-abort-and-contracts-fmt-clippy
+            let penalty = (c.amount * i128::from(c.penalty_bps)) / i128::from(MAX_PENALTY_BPS);
+            paid = c.amount - penalty;
+            token.transfer(&contract, &c.owner, &paid);
+=======
+>>>>>>> master
             c.status = EscrowStatus::Refunded;
             penalty = (c.amount * c.penalty_bps as i128) / MAX_PENALTY_BPS as i128;
             paid = c.amount - penalty;
@@ -680,7 +686,7 @@ impl EscrowContract {
         Self::require_init(&env)?;
         attestor.require_auth();
         let mut c = Self::load(&env, commitment_id)?;
-        let score = if compliance_score > 100 { 100 } else { compliance_score };
+        let score = compliance_score.min(100);
         c.compliance_score = score;
         Self::save(&env, &c);
 
