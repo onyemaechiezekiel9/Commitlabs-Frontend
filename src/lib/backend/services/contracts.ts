@@ -48,12 +48,14 @@ export interface ChainCommitment {
   violationCount: number;
   createdAt?: string;
   expiresAt?: string;
+  contractVersion?: string;
 }
 
 export interface CreateCommitmentOnChainResult {
   commitmentId: string;
   commitment: ChainCommitment;
   txHash?: string;
+  contractVersion?: string;
 }
 
 export interface RecordAttestationOnChainParams {
@@ -74,6 +76,7 @@ export interface RecordAttestationOnChainResult {
   feeEarned: string;
   recordedAt: string;
   txHash?: string;
+  contractVersion?: string;
 }
 
 export interface SettleCommitmentOnChainParams {
@@ -86,12 +89,14 @@ export interface SettleCommitmentOnChainResult {
   txHash?: string;
   reference?: string;
   finalStatus: string;
+  contractVersion?: string;
 }
 
 type ContractCallMode = "read" | "write";
 interface ContractInvocationResult {
   value: unknown;
   txHash?: string;
+  version: string;
 }
 
 const ANALYTICS_SCALE = 100;
@@ -262,7 +267,10 @@ function normalizeContractError(
   });
 }
 
-function parseChainCommitment(value: unknown): ChainCommitment {
+function parseChainCommitment(
+  value: unknown,
+  contractVersion?: string,
+): ChainCommitment {
   const raw = asRecord(value);
   const id = asString(raw.id ?? raw.commitmentId);
 
@@ -290,12 +298,14 @@ function parseChainCommitment(value: unknown): ChainCommitment {
     violationCount: asNumber(raw.violationCount ?? raw.violation_count),
     createdAt: asString(raw.createdAt ?? raw.created_at) || undefined,
     expiresAt: asString(raw.expiresAt ?? raw.expires_at) || undefined,
+    contractVersion,
   };
 }
 
 function parseCreateCommitmentResult(
   value: unknown,
   txHash?: string,
+  contractVersion?: string,
 ): CreateCommitmentOnChainResult {
   if (typeof value === "string") {
     return {
@@ -310,24 +320,31 @@ function parseCreateCommitmentResult(
         currentValue: "0",
         feeEarned: "0",
         violationCount: 0,
+        contractVersion,
       },
       txHash,
+      contractVersion,
     };
   }
 
   const raw = asRecord(value);
-  const parsedCommitment = parseChainCommitment(raw.commitment ?? raw);
+  const parsedCommitment = parseChainCommitment(
+    raw.commitment ?? raw,
+    contractVersion,
+  );
 
   return {
     commitmentId: parsedCommitment.id,
     commitment: parsedCommitment,
     txHash: asString(raw.txHash) || txHash,
+    contractVersion,
   };
 }
 
 function parseAttestationResult(
   value: unknown,
   txHash?: string,
+  contractVersion?: string,
 ): RecordAttestationOnChainResult {
   const raw = asRecord(value);
   const attestationId = asString(raw.attestationId ?? raw.id);
@@ -351,15 +368,19 @@ function parseAttestationResult(
     recordedAt:
       asString(raw.recordedAt ?? raw.recorded_at) || new Date().toISOString(),
     txHash: asString(raw.txHash) || txHash,
+    contractVersion,
   };
 }
 
-function parseCommitmentList(value: unknown): ChainCommitment[] {
+function parseCommitmentList(
+  value: unknown,
+  contractVersion?: string,
+): ChainCommitment[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  return value.map((item) => parseChainCommitment(item));
+  return value.map((item) => parseChainCommitment(item, contractVersion));
 }
 
 async function waitForTransactionResult(
@@ -420,6 +441,7 @@ async function invokeContractMethod(
     });
   }
 
+  const config = getBackendConfig();
   const server = getSorobanServer();
   const contract = new Contract(contractId);
   const account =
@@ -433,7 +455,7 @@ async function invokeContractMethod(
 
   const tx = new TransactionBuilder(account, {
     fee: String(BASE_FEE),
-    networkPassphrase: getNetworkPassphrase(),
+    networkPassphrase: config.networkPassphrase,
   })
     .addOperation(operation)
     .setTimeout(30)
@@ -452,6 +474,7 @@ async function invokeContractMethod(
   if (mode === "read") {
     return {
       value: simulation.result ? scValToNative(simulation.result.retval) : null,
+      version: config.activeVersion,
     };
   }
 
@@ -471,7 +494,7 @@ async function invokeContractMethod(
   const txHash = sendResult.hash;
 
   const onChainValue = await waitForTransactionResult(server, txHash);
-  return { value: onChainValue, txHash };
+  return { value: onChainValue, txHash, version: config.activeVersion };
 }
 
 function validateOwnerAddress(ownerAddress: string): void {
@@ -510,7 +533,11 @@ export async function createCommitmentOnChain(
 
     void cache.delete(CacheKey.userCommitments(params.ownerAddress));
 
-    return parseCreateCommitmentResult(invocation.value, invocation.txHash);
+    return parseCreateCommitmentResult(
+      invocation.value,
+      invocation.txHash,
+      invocation.version,
+    );
   } catch (error) {
     // Increment chain failures counter on blockchain operation failures
     const countersAdapter = getCountersAdapter();
@@ -556,7 +583,10 @@ export async function getCommitmentFromChain(
     const countersAdapter = getCountersAdapter();
     void countersAdapter.incrementSuccessfulActions(); // Fire and forget for metrics
 
-    const commitment = parseChainCommitment(invocation.value);
+    const commitment = parseChainCommitment(
+      invocation.value,
+      invocation.version,
+    );
     await cache.set(cacheKey, commitment, CacheTTL.COMMITMENT_DETAIL);
     return commitment;
   } catch (error) {
@@ -596,7 +626,10 @@ export async function getUserCommitmentsFromChain(
         [ownerAddress],
         "read",
       );
-      const commitments = parseCommitmentList(directResult.value);
+      const commitments = parseCommitmentList(
+        directResult.value,
+        directResult.version,
+      );
       if (commitments.length > 0) {
         await cache.set(cacheKey, commitments, CacheTTL.USER_COMMITMENTS);
         // Increment successful actions counter on successful chain read
@@ -686,7 +719,11 @@ export async function recordAttestationOnChain(
       );
     }
 
-    return parseAttestationResult(invocation.value, invocation.txHash);
+    return parseAttestationResult(
+      invocation.value,
+      invocation.txHash,
+      invocation.version,
+    );
   } catch (error) {
     // Increment chain failures counter on blockchain operation failures
     const countersAdapter = getCountersAdapter();
@@ -774,6 +811,7 @@ export async function settleCommitmentOnChain(
       settlementAmount,
       finalStatus,
       txHash: invocation.txHash,
+      contractVersion: invocation.version,
       reference: invocation.txHash
         ? undefined
         : "TODO_CHAIN_CALL_SETTLE_COMMITMENT",
@@ -850,6 +888,7 @@ export async function earlyExitCommitmentOnChain(
       penaltyAmount,
       finalStatus,
       txHash: invocation.txHash,
+      contractVersion: invocation.version,
       reference: invocation.txHash ? undefined : `TODO_CHAIN_CALL_EARLY_EXIT`
     };
   } catch (error) {

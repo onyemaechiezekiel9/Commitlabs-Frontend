@@ -30,8 +30,11 @@ export const POST = withApiHandler(async (req: NextRequest, { params }, correlat
 
   return ok(
     {
-      message: `Stub early-exit endpoint for commitment ${params.id}`,
       commitmentId: params.id,
+      txHash: '',
+      reference: '',
+      settledAt: new Date().toISOString(),
+      contractVersion: '',
     },
     undefined,
     200,

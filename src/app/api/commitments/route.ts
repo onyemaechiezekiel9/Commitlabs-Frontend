@@ -69,6 +69,7 @@ export const GET = withApiHandler(async (req: NextRequest, _context, correlation
     violationCount: c.violationCount,
     createdAt: c.createdAt,
     expiresAt: c.expiresAt,
+    contractVersion: c.contractVersion,
   }));
 
   if (status) mapped = mapped.filter((c) => c.status === status);

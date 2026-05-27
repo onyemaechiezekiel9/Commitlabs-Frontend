@@ -83,6 +83,7 @@ export const POST = withApiHandler(async (req: NextRequest, { params }, correlat
       txHash: settlementResult.txHash,
       reference: settlementResult.reference,
       settledAt: new Date().toISOString(),
+      contractVersion: settlementResult.contractVersion,
     },
     undefined,
     200,
