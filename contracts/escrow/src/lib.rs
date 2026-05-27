@@ -18,6 +18,15 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec,
 };
 
+// Configuration constants for escrow contract
+const SECONDS_PER_DAY: u64 = 86_400;
+// Maximum allowed commitment amount (example limit)
+const MAX_AMOUNT: i128 = 1_000_000_000_000;
+// Maximum allowed duration in days
+const MAX_DURATION_DAYS: u32 = 365;
+// Maximum penalty basis points (100% = 10_000 bps)
+const MAX_PENALTY_BPS: u32 = 10_000;
+
 /// Storage keys for persistent contract state.
 #[contracttype]
 #[derive(Clone)]
@@ -98,8 +107,7 @@ pub enum Error {
     PenaltyTooHigh = 9,
 }
 
-const MAX_PENALTY_BPS: u32 = 10_000;
-const SECONDS_PER_DAY: u64 = 86_400;
+
 
 #[contract]
 pub struct EscrowContract;
@@ -147,7 +155,13 @@ impl EscrowContract {
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
+        if amount > MAX_AMOUNT {
+            return Err(Error::InvalidAmount);
+        }
         if duration_days == 0 {
+            return Err(Error::InvalidDuration);
+        }
+        if duration_days > MAX_DURATION_DAYS {
             return Err(Error::InvalidDuration);
         }
         if penalty_bps > MAX_PENALTY_BPS {
@@ -156,7 +170,7 @@ impl EscrowContract {
 
         let id = Self::next_id(&env);
         let now = env.ledger().timestamp();
-        let maturity = now + (duration_days as u64) * SECONDS_PER_DAY;
+        let maturity = now.checked_add((duration_days as u64).checked_mul(SECONDS_PER_DAY).ok_or(Error::InvalidDuration)?).ok_or(Error::InvalidDuration)?;
 
         let commitment = Commitment {
             id,
