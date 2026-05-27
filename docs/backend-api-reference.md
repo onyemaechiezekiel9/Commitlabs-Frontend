@@ -270,6 +270,67 @@ curl -X POST http://localhost:3000/api/attestations \
 
 ---
 
+## `GET /api/notifications`
+
+Returns the authenticated owner's derived notification feed. Notifications are
+derived on-read from the owner's commitments and attestations (expiry warnings,
+violations, attestation health checks); they are not persisted.
+
+The feed is filtered by the owner's **notification delivery preferences**. Each
+notification has a `type` (`expiry`, `violation`, `health_check`), and only
+types the owner has opted into are returned. Preferences are read from stored
+user preferences (the `notificationCategories` field) and updated via the
+`PUT /api/user/preferences` endpoint.
+
+- **Query parameters**:
+    - `ownerAddress`: (string, required) The Stellar address whose feed to return.
+    - `page`: (number, optional, default `1`) 1-indexed page number. Must be `>= 1`.
+    - `pageSize`: (number, optional, default `10`) Items per page. Must be `1`–`100`.
+- **Preference filtering**:
+    - Notification categories the owner has set to `false` in
+      `notificationCategories` are excluded from the feed.
+    - When no preferences are stored, or a category key is absent, the category
+      is **delivered by default** (safe opt-in). An owner only stops receiving a
+      category by explicitly opting out.
+    - Filtering is applied **before pagination**, so `total` reflects the count
+      of notifications the owner can actually see — not the raw derived count.
+- **Response**:
+    - `200 OK`: Paginated, preference-filtered feed.
+    - `400 Bad Request`: `ownerAddress` is missing, or pagination params are out of range.
+    - `429 Too Many Requests`: Rate limit exceeded.
+
+### Example
+
+```bash
+curl 'http://localhost:3000/api/notifications?ownerAddress=0x123&page=1&pageSize=10'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "ownerAddress": "0x123",
+        "title": "Commitment Nearing Expiry",
+        "message": "Your commitment CMT-1 for XLM expires in 5 days.",
+        "severity": "warning",
+        "type": "expiry",
+        "read": false,
+        "createdAt": "2026-02-25T00:00:00.000Z",
+        "relatedCommitmentId": "CMT-1"
+      }
+    ],
+    "page": 1,
+    "pageSize": 10,
+    "total": 1
+  }
+}
+```
+
+---
+
 ## `GET /api/protocol/constants`
 
 Returns the public protocol constants used by UX copy and calculations, including fee parameters, penalty tiers, and commitment limits. This endpoint is public and includes caching headers.
