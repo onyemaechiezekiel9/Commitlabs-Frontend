@@ -19,12 +19,19 @@ use soroban_sdk::{
 };
 
 // Configuration constants for escrow contract
+// Configuration constants for escrow contract
+// Number of seconds in a day used for maturity calculation.
 const SECONDS_PER_DAY: u64 = 86_400;
-// Maximum allowed commitment amount (example limit)
+
+/// Upper bound for commitment amount enforced by `create_commitment`.
+/// Aligns with backend `CommitmentLimits.max_amount`.
 const MAX_AMOUNT: i128 = 1_000_000_000_000;
-// Maximum allowed duration in days
+
+/// Upper bound for commitment duration (in days) enforced by `create_commitment`.
+/// Aligns with backend `CommitmentLimits.max_duration_days`.
 const MAX_DURATION_DAYS: u32 = 365;
-// Maximum penalty basis points (100% = 10_000 bps)
+
+/// Upper bound for penalty basis points (10_000 = 100%).
 const MAX_PENALTY_BPS: u32 = 10_000;
 
 /// Storage keys for persistent contract state.
@@ -137,9 +144,14 @@ impl EscrowContract {
 
     /// Create a new (unfunded) commitment escrow. Returns the new commitment id.
     ///
+    /// Validates input against upper bounds defined by backend `CommitmentLimits`:
+    /// * `amount` must be > 0 and <= `MAX_AMOUNT`.
+    /// * `duration_days` must be > 0 and <= `MAX_DURATION_DAYS`.
+    /// * `penalty_bps` must be <= `MAX_PENALTY_BPS`.
+    ///
     /// `duration_days` is converted to an absolute maturity timestamp using the
-    /// current ledger time. `penalty_bps` is the early-exit penalty applied on
-    /// `refund`.
+    /// current ledger time with checked arithmetic to avoid overflow. `penalty_bps`
+    /// is the early-exit penalty applied on `refund`.
     pub fn create_commitment(
         env: Env,
         owner: Address,

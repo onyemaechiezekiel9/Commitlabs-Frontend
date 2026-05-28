@@ -53,6 +53,16 @@ create_commitment ──► fund_escrow ──► release            (matured: p
 points (`penalty_bps`, max `10_000`) and is paid to the configured fee
 recipient on `refund` / adverse `resolve_dispute`.
 
+### Commitment limits
+
+To prevent arithmetic overflow (e.g. during maturity timestamp calculations) and ensure input sanity, the following upper-bound limits are enforced in `create_commitment`:
+- **Maximum Amount (`MAX_AMOUNT`)**: `1_000_000_000_000` (1T units)
+- **Maximum Duration (`MAX_DURATION_DAYS`)**: `365` days (1 year)
+- **Maximum Penalty (`MAX_PENALTY_BPS`)**: `10_000` bps (100%)
+
+Attempts to exceed these limits will return `InvalidAmount` or `InvalidDuration` errors, respectively.
+
+
 ### Errors
 
 Stable numeric error codes (`#[contracterror]`) are surfaced so the backend

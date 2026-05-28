@@ -166,6 +166,18 @@ fn create_rejects_invalid_amount() {
 }
 
 #[test]
+fn create_rejects_overflow_duration() {
+    let f = setup();
+    // Set timestamp close to max to cause overflow when adding duration
+    f.env.ledger().set_timestamp(u64::MAX - 10);
+    let owner = Address::generate(&f.env);
+    fund_owner(&f, &owner, 1_000);
+    // Use a duration that will overflow when added to current timestamp
+    let res = f.client.try_create_commitment(&owner, &f.asset, &1_000, &RiskProfile::Safe, &10u32, &2000u32);
+    assert_eq!(res, Err(Ok(Error::InvalidDuration)));
+}
+
+#[test]
 fn create_rejects_excessive_penalty() {
     let f = setup();
     let owner = Address::generate(&f.env);
@@ -206,34 +218,35 @@ fn owner_index_tracks_commitments() {
     assert_eq!(ids.len(), 2);
     assert_eq!(ids.get(0).unwrap(), a);
     assert_eq!(ids.get(1).unwrap(), b);
-
-    #[test]
-    fn create_rejects_excessive_amount() {
-        let f = setup();
-        let owner = Address::generate(&f.env);
-        let res = f.client.try_create_commitment(
-            &owner,
-            &f.asset,
-            &(MAX_AMOUNT + 1),
-            &RiskProfile::Safe,
-            &(MAX_DURATION_DAYS + 1),
-            &2000,
-        );
-        assert_eq!(res, Err(Ok(Error::InvalidAmount)));
-    }
-
-    #[test]
-    fn create_rejects_excessive_duration() {
-        let f = setup();
-        let owner = Address::generate(&f.env);
-        let res = f.client.try_create_commitment(
-            &owner,
-            &f.asset,
-            &1_000,
-            &RiskProfile::Safe,
-            &(MAX_DURATION_DAYS + 1),
-            &2000,
-        );
-        assert_eq!(res, Err(Ok(Error::InvalidDuration)));
-    }
 }
+
+#[test]
+fn create_rejects_excessive_amount() {
+    let f = setup();
+    let owner = Address::generate(&f.env);
+    let res = f.client.try_create_commitment(
+        &owner,
+        &f.asset,
+        &(MAX_AMOUNT + 1),
+        &RiskProfile::Safe,
+        &30,
+        &2000,
+    );
+    assert_eq!(res, Err(Ok(Error::InvalidAmount)));
+}
+
+#[test]
+fn create_rejects_excessive_duration() {
+    let f = setup();
+    let owner = Address::generate(&f.env);
+    let res = f.client.try_create_commitment(
+        &owner,
+        &f.asset,
+        &1_000,
+        &RiskProfile::Safe,
+        &(MAX_DURATION_DAYS + 1),
+        &2000,
+    );
+    assert_eq!(res, Err(Ok(Error::InvalidDuration)));
+}
+
