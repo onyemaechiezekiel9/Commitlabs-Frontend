@@ -137,6 +137,12 @@ create_commitment ──► fund_escrow ──► release
 
 Compliance scores recorded via `record_attestation` are appended to an on-chain historical log. Use `get_attestations` to retrieve the full timeline.
 
+### Owner commitment pagination
+
+Use `get_owner_commitments(owner, start, limit)` to read owner commitment ids in bounded pages. `start` is a zero-based offset into the owner's index and `limit` is clamped to the contract's maximum page size of 100 ids, so oversized client requests cannot return an unbounded payload. A zero `limit` or a `start` beyond the current index length returns an empty vector.
+
+`get_user_commitment_ids(owner)` remains available as a first-page backend fallback and returns at most 100 ids. Use `get_user_commitment_ids_page(owner, start, limit)` when callers need subsequent pages through the fallback naming path.
+
 ### `early_exit_commitment` entrypoint
 
 ABI signature:
