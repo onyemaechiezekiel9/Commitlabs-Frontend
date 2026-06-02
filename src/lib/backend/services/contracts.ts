@@ -494,6 +494,10 @@ const READ_RETRY_CONFIG = {
  * failures — 404 (not found) and 400 (validation) — are never retried.
  */
 export function isRetryableContractError(error: unknown): boolean {
+  if (error instanceof BackendError && error.code === "GATEWAY_TIMEOUT") {
+    return false;
+  }
+
   const normalized = normalizeContractError(error, {
     code: "BLOCKCHAIN_CALL_FAILED",
     message: "Soroban read call failed.",
@@ -555,6 +559,10 @@ function parseChainCommitment(value: unknown): ChainCommitment {
     violationCount: asNumber(raw.violationCount ?? raw.violation_count),
     createdAt: asString(raw.createdAt ?? raw.created_at) || undefined,
     expiresAt: asString(raw.expiresAt ?? raw.expires_at) || undefined,
+    contractVersion:
+      asString(raw.contractVersion ?? raw.contract_version) ||
+      (getBackendConfig() as { activeVersion?: string }).activeVersion ||
+      undefined,
   };
 }
 
@@ -627,6 +635,46 @@ function parseCommitmentList(value: unknown): ChainCommitment[] {
   return value.map((item) => parseChainCommitment(item));
 }
 
+function getRpcTimeoutMs(): number {
+  const raw = process.env.SOROBAN_RPC_TIMEOUT_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15_000;
+}
+
+function withRpcTimeout<T>(
+  promise: Promise<T>,
+  methodName: string,
+  timeoutMs = getRpcTimeoutMs(),
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new BackendError({
+          code: "GATEWAY_TIMEOUT",
+          message: "The blockchain operation timed out. It may still be processed later.",
+          status: 504,
+          details: {
+            methodName,
+            timeoutMs,
+            retryable: true,
+          },
+        }),
+      );
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function waitForTransactionResult(
   server: SorobanRpc.Server,
   hash: string,
@@ -634,7 +682,11 @@ async function waitForTransactionResult(
 ): Promise<unknown> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const tx = await server.getTransaction(hash);
+    const tx = await withRpcTimeout(
+      server.getTransaction(hash),
+      "getTransaction",
+      timeoutMs,
+    );
     if (tx.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
       return tx.returnValue ? scValToNative(tx.returnValue) : null;
     }
@@ -741,9 +793,15 @@ async function invokeContractMethod(
     });
   }
 
-  const preparedTx = await server.prepareTransaction(tx);
+  const preparedTx = await withRpcTimeout(
+    server.prepareTransaction(tx),
+    "prepareTransaction",
+  );
   preparedTx.sign(sourceKeypair);
-  const sendResult = await server.sendTransaction(preparedTx);
+  const sendResult = await withRpcTimeout(
+    server.sendTransaction(preparedTx),
+    "sendTransaction",
+  );
   const txHash = sendResult.hash;
 
   const onChainValue = await waitForTransactionResult(server, txHash);
@@ -1256,21 +1314,21 @@ export async function openDisputeOnChain(
     );
 
     const result = asRecord(invocation.value);
-    const disputeId = asString(result.disputeId ?? result.id);
+    const disputeId = asString(result.disputeId ?? result.id) || `dsp-${params.commitmentId}`;
     const status = asString(result.status, "DISPUTED");
 
-    // Status changed — invalidate detail and owner list.
     await cache.delete(CacheKey.commitment(params.commitmentId));
     if (commitment.ownerAddress) {
       await cache.delete(CacheKey.userCommitments(commitment.ownerAddress));
     }
+
     logInfo(undefined, "[cache] invalidated commitment after dispute", {
       commitmentId: params.commitmentId,
     });
 
     return {
       commitmentId: params.commitmentId,
-      disputeId: disputeId || `dsp-${params.commitmentId}`,
+      disputeId,
       status,
       txHash: invocation.txHash,
       disputedAt: new Date().toISOString(),
@@ -1318,21 +1376,21 @@ export async function resolveDisputeOnChain(
     );
 
     const result = asRecord(invocation.value);
-    const disputeId = asString(result.disputeId ?? result.id);
+    const disputeId = asString(result.disputeId ?? result.id) || `dsp-${params.commitmentId}`;
     const finalStatus = asString(result.finalStatus, "ACTIVE");
 
-    // Status changed — invalidate detail and owner list.
     await cache.delete(CacheKey.commitment(params.commitmentId));
     if (commitment.ownerAddress) {
       await cache.delete(CacheKey.userCommitments(commitment.ownerAddress));
     }
+
     logInfo(undefined, "[cache] invalidated commitment after dispute resolution", {
       commitmentId: params.commitmentId,
     });
 
     return {
       commitmentId: params.commitmentId,
-      disputeId: disputeId || `dsp-${params.commitmentId}`,
+      disputeId,
       resolution: params.resolution,
       finalStatus,
       txHash: invocation.txHash,

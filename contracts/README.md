@@ -1,33 +1,23 @@
-### Admin and Fee Recipient Rotation
-
-The contract supports secure rotation of the admin and fee recipient addresses after initialization:
-
-| Function | Description |
-| --- | --- |
-| `set_admin(new_admin)` | Admin-only. Rotates the contract admin to `new_admin`. Emits an event. |
-| `set_fee_recipient(new_fee_recipient)` | Admin-only. Rotates the protocol fee recipient. Emits an event. |
-
-Both functions require the current admin to authorize the call. Rotation is rejected if the contract is not initialized. Events are emitted for auditability.
 # CommitLabs Soroban Contracts
 
-Soroban (Rust) smart-contract workspace backing the CommitLabs liquidity
-commitment protocol. The frontend and Next.js backend service layer
-(`src/lib/backend/services/contracts.ts`) interact with these contracts via the
-Stellar Soroban RPC.
+Soroban smart contracts backing the CommitLabs liquidity commitment lifecycle.
+The `escrow` contract is the primary on-chain component used by the frontend
+and backend services to create, fund, release, refund, and dispute
+commitments.
 
 ## Workspace layout
 
-```
+```text
 contracts/
-├── Cargo.toml          # Cargo workspace (members = ["escrow"])
-└── escrow/
-    ├── Cargo.toml      # commitlabs-escrow crate (cdylib + rlib)
-    └── src/
-        ├── lib.rs      # EscrowContract implementation
-        └── test.rs     # Unit tests (cfg(test))
+|-- Cargo.toml
+`-- escrow/
+    |-- Cargo.toml
+    `-- src/
+        |-- lib.rs
+        `-- test.rs
 ```
 
-## `escrow` contract
+## Escrow lifecycle
 
 The escrow contract manages the on-chain lifecycle of a liquidity commitment.
 Assets are deposited under a chosen risk profile and held in escrow until the
@@ -42,6 +32,65 @@ To prevent reentrancy and similar vulnerabilities when interacting with external
 
 This strict ordering guarantees the contract's internal state is fully resolved before execution control is temporarily handed over to external logic.
 
+## EscrowStatus State Machine
+
+### States
+
+| State | Description |
+|-------|-------------|
+| `Created` | Commitment created but not yet funded. Awaiting owner to deposit assets. |
+| `Funded` | Assets locked in escrow. Commitment is actively held and can be released, refunded, or disputed. |
+| `Released` | Matured and released to the owner. Principal plus accrued yield returned. Terminal state. |
+| `Refunded` | Exited early or resolved via dispute. Principal minus penalty returned. Terminal state. |
+| `Disputed` | Under dispute; all transfers frozen pending admin resolution. Intermediate state. |
+| `Violated` | Compliance score dropped below violation threshold. Transfers frozen until resolved. Intermediate state. |
+
+### Transition Diagram (ASCII)
+
+```
+                    ┌─────────────┐
+                    │   CREATED   │
+                    └──────┬──────┘
+                           │ fund_escrow()
+                           ▼
+                    ┌─────────────┐
+                    │   FUNDED    │◄─────────────────────────────┐
+                    └──┬──┬──┬────┘                              │
+                       │  │  │                                   │
+        ┌──────────────┘  │  └──────────────┐                   │
+        │                 │                 │                   │
+        │ release()       │ refund()        │ dispute()         │
+        │ (matured)       │ (early exit)    │ (frozen)          │
+        │                 │                 │                   │
+        ▼                 ▼                 ▼                   │
+    ┌─────────┐      ┌─────────┐      ┌──────────┐             │
+    │RELEASED │      │REFUNDED │      │ DISPUTED │             │
+    └─────────┘      └─────────┘      └────┬─────┘             │
+                                            │                   │
+                                            │ resolve_dispute() │
+                                            │                   │
+                                            └───────────────────┘
+                                                (release or refund)
+
+    record_attestation() with low score:
+    FUNDED ──────────────────────► VIOLATED ──► resolve_dispute() ──► FUNDED or RELEASED/REFUNDED
+```
+
+### Transition Table
+
+| From State | To State | Triggered By | Authorized | Preconditions |
+|------------|----------|--------------|-----------|---------------|
+| `Created` | `Funded` | `fund_escrow()` | Owner | Owner has sufficient balance; asset matches configured token |
+| `Funded` | `Released` | `release()` | Any | Ledger time ≥ maturity; yield pool has sufficient balance |
+| `Funded` | `Refunded` | `refund()` | Owner | Before maturity (or within grace period); not violated |
+| `Funded` | `Refunded` | `refund_partial()` | Owner | Partial withdrawal; remainder stays funded or becomes refunded |
+| `Funded` | `Disputed` | `dispute()` | Owner or Admin | Commitment is funded |
+| `Funded` | `Violated` | `record_attestation()` | Attestor | Compliance score < violation threshold |
+| `Disputed` | `Released` | `resolve_dispute(release_to_owner=true)` | Admin | Dispute exists; yield pool sufficient if matured |
+| `Disputed` | `Refunded` | `resolve_dispute(release_to_owner=false)` | Admin | Dispute exists |
+| `Violated` | `Released` | `resolve_dispute(release_to_owner=true)` | Admin | Violation exists; yield pool sufficient if matured |
+| `Violated` | `Refunded` | `resolve_dispute(release_to_owner=false)` | Admin | Violation exists |
+
 ### Lifecycle
 
 ```
@@ -50,27 +99,28 @@ create_commitment ──► fund_escrow ──► release            (matured: p
                                   └──► dispute ──► resolve_dispute   (admin adjudication)
 ```
 
+### Persistent storage TTL strategy
+
+Commitment records and owner-index entries live in persistent Soroban storage, so
+they need explicit TTL management for long-duration escrows.
+
+- `save` bumps each `Commitment(id)` entry when its remaining TTL no longer covers the commitment maturity horizon.
+- `index_owner` recomputes the latest maturity still referenced by an owner's id list and bumps `OwnerIndex(owner)` to that horizon.
+- The target TTL is the remaining time to maturity plus a small post-maturity ledger buffer so release/refund can still execute after the unlock point.
+- Bumps are thresholded instead of unconditional to avoid paying rent-extension fees when an entry already has enough TTL.
+
+This keeps active commitments readable for their full lifecycle while keeping
+Soroban fee overhead under control.
+
 ### Marketplace transfer flow (secondary trading)
 
-`transfer_ownership(commitment_id, new_owner)` updates ownership for a **funded** commitment.
-
-**Flow**
-1. Marketplace buyer proposes `new_owner`.
-2. The current commitment owner calls `transfer_ownership` and must authorize via `require_auth()`.
-3. The contract verifies the commitment is `Funded` (transfers are blocked for non-funded states).
-4. The contract updates:
-   - `Commitment.owner`
-   - `OwnerIndex` for both `old_owner` and `new_owner`
-5. The commitment is now eligible for subsequent `release` / `refund` / dispute handling under the new owner.
-
-
-### Public functions
+## Public entrypoints
 
 | Function | Description |
 | --- | --- |
 | `initialize(admin, token, fee_recipient, safe_default_penalty_bps, balanced_default_penalty_bps, aggressive_default_penalty_bps)` | One-time setup of admin, escrow token (SAC), fee recipient, and default penalties for each risk profile. |
 | `create_commitment(owner, asset, amount, risk, duration_days, penalty_bps)` | Create an unfunded commitment with explicit penalty; returns its `id`. |
-| `create_commitment_with_default_penalty(owner, asset, amount, risk, duration_days)` | Create an unfunded commitment using the default penalty for the risk profile; returns its `id`. |
+| `create_default_commitment(owner, asset, amount, risk, duration_days)` | Create an unfunded commitment using the default penalty for the risk profile; returns its `id`. |
 | `fund_escrow(commitment_id)` | Transfer `amount` from owner into the contract (`Created → Funded`). |
 | `transfer_ownership(commitment_id, new_owner)` | Transfer marketplace ownership for secondary trading (`Funded` only). Current owner must authorize and the contract updates both `Commitment.owner` and `OwnerIndex`. |
 | `release(commitment_id, caller)` | Return principal to owner once matured (`Funded → Released`). |
@@ -100,9 +150,11 @@ create_commitment ──► fund_escrow ──► release            (matured: p
 | `set_violation_threshold(threshold)` | Admin-only. Set the compliance score threshold (0–100) below which a funded commitment is auto-violated. 0 disables auto-violation. |
 | `get_violation_threshold()` | Read the current violation threshold. |
 
-### Attestation History
+## Lifecycle event schema
 
-Compliance scores recorded via `record_attestation` are appended to an on-chain historical log. This allows clients to query the timeline of scores for a given commitment rather than just reading the latest value. Use `get_attestations` to retrieve a list of `AttestationRecord` structures, each containing the attestor address, the compliance score, and the timestamp.
+The backend indexer depends on the lifecycle event topics staying stable.
+`contracts/escrow/src/lib.rs` includes an explicit comment on the shared helper
+that should not be changed without coordinating an indexer update.
 
 ### User commitment readers
 
@@ -112,54 +164,43 @@ For compatibility and fallback hydration, the contract also keeps an id-only rea
 
 ### `early_exit_commitment` entrypoint details
 
-#### ABI Signature
-```rust
-pub fn early_exit_commitment(
-    env: Env,
-    commitment_id: u64,
-    caller: Address,
-) -> Result<EarlyExitResult, Error>
+All primary lifecycle events use the same topic order:
+
+```text
+(event_name, owner, commitment_id)
 ```
 
-#### Response Struct Format (`EarlyExitResult`)
-When returned from the contract, the result is serialized as a map/object containing:
-* **`exitAmount`** (`i128`): The final amount returned to the commitment owner (principal minus penalty).
-* **`penaltyAmount`** (`i128`): The penalty fee amount deducted and paid to the fee recipient.
-* **`finalStatus`** (`EscrowStatus`): The final status of the commitment (always `Refunded`).
+- `event_name`: `create_commitment`, `fund_escrow`, `release`, `refund`, `dispute`
+- `owner`: the stored commitment owner, even when another authorized actor opens
+  the dispute
+- `commitment_id`: the unique escrow commitment id
 
-#### Field Descriptions
-| Field | Type | Description |
-| --- | --- | --- |
-| `exitAmount` | `i128` | The absolute quantity of tokens transferred back to the commitment owner. |
-| `penaltyAmount` | `i128` | The absolute quantity of tokens transferred to the fee recipient as an early-exit penalty. |
-| `finalStatus` | `EscrowStatus` | The post-exit state of the escrow commitment, represented as `Refunded`. |
+### Event payloads
 
-#### Example Usage
-An invocator (e.g., the backend service layer) calls this entrypoint and retrieves the structured receipt:
-```typescript
-const result = await invokeContractMethod(
-  contractId,
-  "early_exit_commitment",
-  [commitmentId, ownerAddress],
-  "write"
-);
-console.log(`Exit Amount: ${result.exitAmount}, Penalty: ${result.penaltyAmount}`);
-```
+| Event | Payload fields |
+| --- | --- |
+| `create_commitment` | `asset`, `amount`, `risk`, `maturity`, `penalty_bps` |
+| `fund_escrow` | `asset`, `amount`, `risk` |
+| `release` | `asset`, `amount`, `accrued_yield`, `payout`, `risk` |
+| `refund` | `asset`, `amount`, `refunded_amount`, `penalty`, `risk` |
+| `dispute` | `asset`, `amount`, `risk`, `reason_category`, `reason_text`, `disputed_by` |
+| `resolve_dispute` | `asset`, `amount`, `payout`, `penalty`, `risk`, `release_to_owner` |
 
-#### Grace period behavior
-The contract supports a configurable penalty-free window before commitment maturity. If a funded commitment is refunded while the ledger time is within the configured grace period before maturity, the early-exit penalty is waived and the full principal is returned.
+This schema makes it possible to index by owner/id from topics while still
+including risk profile and amount in the event data for downstream analytics.
 
-### Yield model
+## Yield model
 
-Matured `release` payouts now return the locked principal plus the commitment's accrued yield. Yield is calculated at commitment creation using a simple annualized model based on the selected `RiskProfile` and the commitment duration.
+Accrued yield is computed at commitment creation using annualized basis-point
+rates:
 
-- `Safe`: 5.00% annualized
-- `Balanced`: 7.00% annualized
-- `Aggressive`: 10.00% annualized
+- `Safe`: `500` bps
+- `Balanced`: `700` bps
+- `Aggressive`: `1000` bps
 
-Yield is funded by the admin through `deposit_yield_pool(admin, amount)`. The contract maintains a dedicated yield pool balance, and a matured release will fail if the pool has insufficient funds to pay the accrued yield.
+The admin must fund the yield pool before matured releases can pay yield.
 
-### Risk profiles & penalties
+## Testing
 
 `RiskProfile` is `Safe | Balanced | Aggressive`, matching the frontend
 `CommitmentType`. The early-exit penalty is supplied at creation time in basis
@@ -179,11 +220,45 @@ Attempts to exceed these limits will return `InvalidAmount` or `InvalidDuration`
 ### Errors
 
 Stable numeric error codes (`#[contracterror]`) are surfaced so the backend
-`normalizeContractError` mapper can translate them into HTTP responses:
-`AlreadyInitialized`, `NotInitialized`, `NotFound`, `Unauthorized`,
-`InvalidAmount`, `InvalidState`, `NotMatured`, `InvalidDuration`,
-`PenaltyTooHigh`, `Paused`, `AssetMismatch`, `InsufficientYieldPool`,
-`InvalidWasmHash`, `CommitmentViolated`.
+`normalizeContractError` mapper can translate them into HTTP responses.
+
+| Code | Variant | Triggered When |
+|------|---------|----------------|
+| 1 | `AlreadyInitialized` | `initialize()` called more than once |
+| 2 | `NotInitialized` | Contract not initialized; admin or token not set |
+| 3 | `NotFound` | Commitment id does not exist |
+| 4 | `Unauthorized` | Caller not authorized for the operation (e.g., non-owner calling `refund()`) |
+| 5 | `InvalidAmount` | Amount is ≤ 0, exceeds `MAX_AMOUNT`, or insufficient balance |
+| 6 | `InvalidState` | Commitment in wrong state for the operation (e.g., `refund()` on `Released`) |
+| 7 | `NotMatured` | `release()` called before maturity timestamp |
+| 8 | `InvalidDuration` | Duration is 0, exceeds `MAX_DURATION_DAYS`, or causes timestamp overflow |
+| 9 | `PenaltyTooHigh` | Penalty exceeds `MAX_PENALTY_BPS` (10,000 basis points = 100%) |
+| 10 | `Paused` | Contract is paused; write operations blocked |
+| 11 | `AssetMismatch` | Commitment asset does not match configured escrow token |
+| 12 | `InsufficientYieldPool` | Yield pool balance insufficient to pay matured commitment yield |
+| 13 | `InvalidWasmHash` | WASM hash provided for upgrade is zero or invalid |
+| 14 | `CommitmentViolated` | Commitment in `Violated` status; release and refund blocked until resolved |
+
+### Error Handling Best Practices
+
+- **InvalidState**: Check commitment status before calling state-transition functions. Use `get_commitment()` to verify current state.
+- **NotMatured**: For `release()`, check the commitment's maturity timestamp against the current ledger time.
+- **InsufficientYieldPool**: Ensure the admin has deposited sufficient yield via `deposit_yield_pool()` before matured commitments are released.
+- **CommitmentViolated**: If a commitment is violated, the admin must call `resolve_dispute()` to transition it back to a usable state.
+- **Paused**: If the contract is paused, wait for the admin to call `unpause()` before retrying write operations.
+
+## Keeping This Document in Sync
+
+This README documents the escrow contract's state machine, authorization model, and error codes. It must be updated whenever:
+
+- A new `EscrowStatus` variant is added or removed
+- A new public entrypoint is added or removed
+- Authorization rules change (e.g., a function becomes admin-only)
+- New error codes are added to the `#[contracterror]` enum
+- State transitions change (e.g., a function now transitions to a different state)
+
+**Cross-reference**: `contracts/escrow/src/lib.rs` (source of truth for all contract logic)  
+**Test coverage**: `contracts/escrow/src/test.rs` (validates state transitions and authorization)
 
 ## Build & test
 
@@ -191,20 +266,12 @@ Requires the `stellar` CLI (v23) and the `wasm32v1-none` / `wasm32-unknown-unkno
 target.
 
 ```bash
-# from contracts/
-cargo test            # run unit tests in escrow/src/test.rs
-stellar contract build
+cargo test
 ```
 
-> Note: this workspace is scaffolded to ground the contract issue backlog.
-> Verify a local toolchain before deploying to testnet/mainnet.
+The lifecycle event tests assert:
 
-## Continuous Integration
-
-A GitHub Actions CI workflow is configured in `.github/workflows/contracts.yml`.
-On every push and pull request touching the `contracts/` directory or the workflow file, the CI will:
-1. Set up the stable Rust toolchain with the `wasm32-unknown-unknown` target.
-2. Cache Cargo registries and dependency builds via `Swatinem/rust-cache` to ensure fast execution.
-3. Install the required version of the `stellar-cli` (v23.0.0).
-4. Run `cargo test --locked` to execute the escrow contract unit tests.
-5. Execute `stellar contract build` to verify smart contract compilation to WebAssembly.
+- stable topic ordering
+- stable event names
+- risk/amount fields in payloads
+- event emission across create, fund, release, refund, and dispute

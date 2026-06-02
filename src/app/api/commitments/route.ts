@@ -109,6 +109,20 @@ export const POST = withApiHandler(async (req: NextRequest, _context, correlatio
   } catch {
     throw new ValidationError("Asset is not supported. Supported assets: XLM, USDC.");
   }
+  if (!ownerAddress || typeof ownerAddress !== "string") {
+    return fail("BAD_REQUEST", "Invalid ownerAddress", undefined, 400, correlationId);
+  }
+  try {
+    validateStellarAddress(ownerAddress, "ownerAddress");
+  } catch {
+    return fail(
+      "BAD_REQUEST",
+      "Invalid ownerAddress: must be a valid Stellar address (G... format).",
+      undefined,
+      400,
+      correlationId,
+    );
+  }
   if (!amount || isNaN(Number(amount))) {
     return fail("BAD_REQUEST", "Invalid amount", undefined, 400, correlationId);
   }
