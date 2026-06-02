@@ -112,33 +112,26 @@ create_commitment ──► fund_escrow ──► release
 
 | Function | Description |
 | --- | --- |
-| `initialize(admin, token, fee_recipient, safe_default_penalty_bps, balanced_default_penalty_bps, aggressive_default_penalty_bps)` | One-time setup of admin, escrow token, fee recipient, and default penalties. |
-| `create_commitment(owner, asset, amount, risk, duration_days, penalty_bps)` | Create an unfunded commitment with explicit penalty. |
-| `create_commitment_with_default_penalty(owner, asset, amount, risk, duration_days)` | Create an unfunded commitment using the risk profile default penalty. |
-| `fund_escrow(commitment_id)` | Move a commitment from `Created` to `Funded`. |
-| `transfer_ownership(commitment_id, new_owner)` | Transfer marketplace ownership for a funded commitment. |
-| `release(commitment_id, caller)` | Return principal plus accrued yield once matured. |
-| `refund(commitment_id)` | Early-exit refund of principal minus penalty. |
-| `refund_partial(commitment_id, amount)` | Partial early-exit while keeping the remainder escrowed. |
-| `dispute(commitment_id, caller, reason)` | Freeze a funded commitment pending admin resolution. |
-| `resolve_dispute(commitment_id, release_to_owner)` | Admin-only disputed settlement. |
-| `record_attestation(commitment_id, attestor, compliance_score)` | Record a 0-100 compliance score. |
-| `deposit_yield_pool(admin, amount)` | Admin-only yield funding. |
-| `get_yield_pool_balance()` | Read available yield pool balance. |
-| `set_grace_period(admin, grace_period_seconds)` | Admin-only grace window configuration. |
-| `get_grace_period()` | Read the grace period in seconds. |
-| `set_violation_threshold(threshold)` | Admin-only automatic violation threshold. |
-| `get_violation_threshold()` | Read the current violation threshold. |
-| `pause()` | Admin-only emergency pause. |
-| `unpause()` | Admin-only resume writes. |
-| `is_paused()` | Read pause state. |
-| `get_commitment(commitment_id)` | Read a single commitment. |
-| `get_owner_commitments(owner, start, limit)` | List a bounded page of commitment ids for an owner. |
-| `get_user_commitment_ids_page(owner, start, limit)` | Backend fallback reader for a bounded page of owner commitment ids. |
-| `get_attestations(commitment_id)` | Read historical attestation records. |
-| `get_default_penalty(risk)` | Read the default penalty for a risk profile. |
-| `set_admin(new_admin)` | Rotate the admin address. |
-| `set_fee_recipient(new_fee_recipient)` | Rotate the fee recipient address. |
+| `initialize(admin, token, fee_recipient, safe_default_penalty_bps, balanced_default_penalty_bps, aggressive_default_penalty_bps)` | One-time setup of admin, escrow token (SAC), fee recipient, and default penalties for each risk profile. |
+| `create_commitment(owner, asset, amount, risk, duration_days, penalty_bps)` | Create an unfunded commitment with explicit penalty; returns its `id`. |
+| `create_commitment_default(owner, asset, amount, risk, duration_days)` | Create an unfunded commitment using the default penalty for the risk profile; returns its `id`. |
+| `fund_escrow(commitment_id)` | Transfer `amount` from owner into the contract (`Created → Funded`). |
+| `deposit_yield_pool(admin, amount)` | Admin-only deposit of yield tokens into the contract yield pool. |
+| `get_yield_pool_balance()` | Read the yield pool balance available for matured release payouts. |
+| `release(commitment_id, caller)` | Return principal plus accrued yield to owner once matured (`Funded → Released`). |
+| `settle_commitment(commitment_id, caller)` | Alias for `release` that returns a settlement result matching backend ABI expectations. |
+| `refund(commitment_id)` | Early-exit refund of principal minus `penalty_bps` (`Funded → Refunded`). |
+| `dispute(commitment_id, caller, reason)` | Freeze a funded commitment pending admin resolution. The reason is automatically categorized. |
+| `resolve_dispute(commitment_id, release_to_owner)` | Admin-only settlement of a disputed commitment. |
+| `get_dispute(commitment_id)` | Read the dispute record for a commitment (category, reason, timestamp, initiator). |
+| `get_default_penalty(risk)` | Read the default penalty for a specific risk profile. |
+| `record_attestation(commitment_id, attestor, compliance_score)` | Record a 0–100 compliance score. |
+| `pause()` | Admin-only emergency pause for write operations. |
+| `unpause()` | Admin-only resume for paused contract writes. |
+| `is_paused()` | Read the current paused state. |
+| `get_commitment(commitment_id)` | Read a single commitment record. |
+| `get_owner_commitments(owner)` | List commitment ids owned by an address. |
+| `get_attestations(commitment_id)` | Retrieve the timeline of `AttestationRecord`s for a commitment. |
 
 ### Attestation history
 
@@ -182,13 +175,80 @@ Yield is funded via `deposit_yield_pool(admin, amount)`.
 
 `RiskProfile` is `Safe | Balanced | Aggressive`, matching the frontend `CommitmentType`.
 
-### Commitment limits
+Default penalties are configured once at initialization and automatically applied
+to commitments created via `create_commitment_default()`. This
+simplifies commitment creation when consistent penalty tiers are desired.
 
 Upper-bound limits enforced in `create_commitment`:
 
-- `MAX_AMOUNT`: `1_000_000_000_000`
-- `MAX_DURATION_DAYS`: `365`
-- `MAX_PENALTY_BPS`: `10_000`
+The contract defaults match the CommitLabs backend tier structure:
+
+| Risk Profile | Default Penalty | Basis Points | Use Case |
+| --- | --- | --- | --- |
+| Safe | 2% | 200 | Low-risk commitments with minimal early-exit cost |
+| Balanced | 3% | 300 | Medium-risk commitments with moderate early-exit cost |
+| Aggressive | 5% | 500 | High-risk commitments with significant early-exit cost |
+
+#### Two API patterns
+
+The contract provides two ways to create commitments:
+
+1. **Explicit penalty** (`create_commitment`): Set a specific penalty per commitment
+   - Allows per-commitment customization
+   - Overrides default if needed
+   - Useful for custom deal terms
+
+2. **Default penalty** (`create_commitment_default`): Use the profile default
+   - Simplifies API calls
+   - Ensures consistency across commitments
+   - No penalty parameter needed
+
+Example:
+```rust
+// Use default penalty (e.g., 3% for Balanced risk)
+let id = contract.create_commitment_default(
+    &owner, &asset, &1000, &RiskProfile::Balanced, &30
+)?;
+
+// Or override with custom penalty (e.g., 2% instead of default 3%)
+let id = contract.create_commitment(
+    &owner, &asset, &1000, &RiskProfile::Balanced, &30, &200
+)?;
+```
+
+#### Querying defaults
+
+Use `get_default_penalty(risk)` to retrieve the current default for a risk profile.
+Useful for frontend/backend UI and verification.
+
+### Dispute categorization & reason storage
+
+When a commitment is disputed via `dispute(commitment_id, caller, reason)`, the
+contract automatically categorizes the reason string into a `DisputeReason` enum
+using keyword matching. This enables efficient on-chain classification and 
+off-chain indexing of disputes.
+
+#### DisputeReason categories
+
+| Category | Keywords | Example |
+| --- | --- | --- |
+| `ValueMismatch` | value, mismatch, amount, delivered | "actual value delivered was less than promised" |
+| `NonCompliance` | compliance, attestation, failed, violation | "compliance violation detected" |
+| `FraudSuspicion` | fraud, unauthorized, suspicious | "suspected fraudulent activity" |
+| `OperationalFailure` | operational, failure, delivery | "operational failure in delivery" |
+| `Other` | (default) | "some other unclassified reason" |
+
+#### Dispute record structure
+
+Each disputed commitment stores a `DisputeRecord` containing:
+- `reason_category`: The `DisputeReason` enum value (0–4)
+- `reason_text`: The free-form reason string provided by the initiator (for audit)
+- `disputed_at`: Ledger timestamp when the dispute was opened
+- `disputed_by`: Address that initiated the dispute (owner or admin)
+
+The dispute record is persisted on-chain and can be read at any time via
+`get_dispute(commitment_id)`, even after the dispute is resolved. This enables
+auditing, analytics, and off-chain verification of dispute history.
 
 ### Errors
 
