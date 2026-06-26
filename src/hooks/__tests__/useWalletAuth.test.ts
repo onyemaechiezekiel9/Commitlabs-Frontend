@@ -248,22 +248,35 @@ describe('useWallet authentication', () => {
       ok: true,
       json: async () => new Promise(resolve => setTimeout(() => resolve({
         data: { nonce: 'n', message: 'msg' },
-      }), 100)),
+      }), 50)),
+    } as Response);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: { verified: true, sessionToken: 'token' },
+      }),
     } as Response);
 
     const { result } = renderHook(() => useWallet());
     await waitFor(() => expect(result.current.connected).toBe(true));
 
+    let signInPromise1: Promise<void>;
     act(() => {
-      result.current.signIn();
+      signInPromise1 = result.current.signIn();
     });
 
     expect(result.current.authenticating).toBe(true);
 
+    let signInPromise2: Promise<void>;
     act(() => {
-      result.current.signIn();
+      signInPromise2 = result.current.signIn();
     });
 
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await Promise.all([signInPromise1, signInPromise2]);
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });
