@@ -16,6 +16,7 @@ import { listCommitments } from '@/lib/backend/mocks/contracts'
 import { fetchProtocolConstants, ProtocolConstants } from '@/utils/protocol'
 import { getValidatedClientEnv } from '@/lib/clientEnv'
 import { AppShellLayout } from '@/components/shell/AppShellLayout'
+import { sortCommitments, SortOption } from '@/utils/sortCommitments'
 
 const mockCommitments: Commitment[] = [
   {
@@ -143,7 +144,7 @@ export default function MyCommitments() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [typeFilter, setTypeFilter] = useState('All')
-  const [sortBy, setSortBy] = useState('Newest')
+  const [sortBy, setSortBy] = useState<SortOption>('Newest')
 
   const [earlyExitCommitmentId, setEarlyExitCommitmentId] = useState<string | null>(null)
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -185,18 +186,7 @@ export default function MyCommitments() {
       return matchesSearch && matchesStatus && matchesType
     })
 
-    // Basic Sorting Logic
-    if (sortBy === 'ValueHighLow') {
-      filtered.sort((a, b) => Number(b.amount.replace(/,/g, '')) - Number(a.amount.replace(/,/g, '')))
-    } else if (sortBy === 'ValueLowHigh') {
-      filtered.sort((a, b) => Number(a.amount.replace(/,/g, '')) - Number(b.amount.replace(/,/g, '')))
-    } else if (sortBy === 'Newest') {
-      filtered.sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime())
-    } else if (sortBy === 'Oldest') {
-      filtered.sort((a, b) => new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime())
-    }
-
-    return filtered
+    return sortCommitments(filtered, sortBy)
   }, [commitmentsList, searchQuery, statusFilter, typeFilter, sortBy])
 
   const commitmentForEarlyExit = commitmentsList.find((c) => c.id === earlyExitCommitmentId)
