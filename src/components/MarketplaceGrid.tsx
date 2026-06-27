@@ -3,9 +3,17 @@ import { MarketplaceCard } from './MarketplaceCard'
 
 export interface MarketplaceGridProps {
   items: MarketplaceCardProps[]
+  isComparePinned?: (id: string) => boolean
+  isCompareFull?: boolean
+  onCompareToggle?: (listing: MarketplaceCardProps) => void
 }
 
-export function MarketplaceGrid({ items }: MarketplaceGridProps) {
+export function MarketplaceGrid({
+  items,
+  isComparePinned,
+  isCompareFull = false,
+  onCompareToggle,
+}: MarketplaceGridProps) {
   if (!items || items.length === 0) {
     return (
       <section className="mt-10" aria-label="Marketplace listings">
@@ -28,11 +36,21 @@ export function MarketplaceGrid({ items }: MarketplaceGridProps) {
   return (
     <section className="mt-6" aria-label="Marketplace listings">
       <ul className="list-none p-0 m-0 grid grid-cols-3 gap-6 max-[1024px]:grid-cols-2 max-[720px]:grid-cols-1">
-        {items.map((item) => (
-          <li key={item.id} className="min-h-[280px]">
-            <MarketplaceCard {...item} />
-          </li>
-        ))}
+        {items.map((item) => {
+          const compareSelected = isComparePinned?.(item.id) ?? false
+          return (
+            <li key={item.id} className="min-h-[280px]">
+              <MarketplaceCard
+                {...item}
+                compareSelected={compareSelected}
+                compareDisabled={isCompareFull && !compareSelected}
+                onCompareToggle={
+                  onCompareToggle ? () => onCompareToggle(item) : undefined
+                }
+              />
+            </li>
+          )
+        })}
       </ul>
     </section>
   )

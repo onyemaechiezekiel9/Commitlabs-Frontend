@@ -9,6 +9,9 @@ import MarketplaceFilters from '@/components/MarketplaceFilter/MarketplaceFilter
 import { MarketplaceGridSkeleton } from '@/components/MarketplaceGridSkeleton'
 import { AppShellLayout } from '@/components/shell/AppShellLayout'
 import { TrustBadge } from '@/components/TrustBadge'
+import { CompareTray } from '@/components/marketplace/CompareTray'
+import { useCompareListings } from '@/hooks/useCompareListings'
+import type { MarketplaceCardProps } from '@/components/MarketplaceCard'
 
 // Interfaces matching the components
 interface Filters {
@@ -346,6 +349,14 @@ export default function Marketplace() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const {
+    listings: compareListings,
+    isPinned,
+    isFull: isCompareFull,
+    toggleListing,
+    removeListing,
+    clearAll: clearCompareListings,
+  } = useCompareListings()
   const [filters, setFilters] = useState<Filters>({
     sortBy: 'price',
     commitmentType: ['balanced'],
@@ -478,7 +489,12 @@ export default function Marketplace() {
                 onPageChange={handlePageChange}
               >
                 {viewMode === 'grid' ? (
-                  <MarketplaceGrid items={pagedListings} />
+                  <MarketplaceGrid
+                    items={pagedListings}
+                    isComparePinned={isPinned}
+                    isCompareFull={isCompareFull}
+                    onCompareToggle={(listing: MarketplaceCardProps) => toggleListing(listing)}
+                  />
                 ) : (
                   <MarketplaceListView items={pagedListings} />
                 )}
@@ -487,6 +503,12 @@ export default function Marketplace() {
           </div>
         </div>
       </main>
+
+      <CompareTray
+        listings={compareListings}
+        onRemove={removeListing}
+        onClear={clearCompareListings}
+      />
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
