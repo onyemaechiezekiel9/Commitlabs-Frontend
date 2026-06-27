@@ -80,7 +80,7 @@ export default function CommitmentHealthMetrics({
                                 'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all duration-200',
                                 activeTab === tab.id
                                     ? 'bg-[#222] text-[#0ff0fc] shadow-sm'
-                                    : 'text-[#666] hover:text-[#99a1af] hover:bg-[#1a1a1a]'
+                                    : 'text-[#8892a0] hover:text-[#99a1af] hover:bg-[#1a1a1a]'
                             )}
                         >
                             {tabIcons[tab.id]}
