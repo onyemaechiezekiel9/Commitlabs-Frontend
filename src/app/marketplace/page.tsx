@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState, useEffect } from 'react'
 import { MarketplaceHeader } from '@/components/MarketplaceHeader/MarketplaceHeader'
 import { MarketplaceGrid } from '@/components/MarketplaceGrid'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { MarketplaceResultsLayout } from '@/components/MarketplaceResultsLayout'
 import MarketplaceFilters from '@/components/MarketplaceFilter/MarketplaceFilters'
 import { MarketplaceGridSkeleton } from '@/components/MarketplaceGridSkeleton'
@@ -478,9 +479,13 @@ export default function Marketplace() {
                 onPageChange={handlePageChange}
               >
                 {viewMode === 'grid' ? (
-                  <MarketplaceGrid items={pagedListings} />
+                  <ErrorBoundary>
+                    <MarketplaceGrid items={pagedListings} />
+                  </ErrorBoundary>
                 ) : (
-                  <MarketplaceListView items={pagedListings} />
+                  <ErrorBoundary>
+                    <MarketplaceListView items={pagedListings} />
+                  </ErrorBoundary>
                 )}
               </MarketplaceResultsLayout>
             )}
