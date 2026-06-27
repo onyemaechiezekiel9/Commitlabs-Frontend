@@ -12,7 +12,7 @@ The frontend application for the CommitLabs protocol, a decentralized platform f
 - [Project Structure](#project-structure)
 - [Backend API Changelog](#backend-api-changelog)
 - [Settlement and Early Exit UI Flows](docs/settlement-and-early-exit-flows.md)
-- [Contributing](#contributing)
+- [Community & Contributing](#community--contributing)
 - [API Reference](#api-reference)
 - [License](#license)
 
@@ -190,8 +190,6 @@ See [docs/FRONTEND_ARCHITECTURE.md](./docs/FRONTEND_ARCHITECTURE.md) for a
 detailed page→component→API-route map and state/data-flow conventions.
 ```
 
-## 🤝 Contributing
-
 ## Security Headers
 
 This project includes a reusable helper to attach standard security headers to HTTP responses.
@@ -227,10 +225,6 @@ This project includes a reusable helper to attach standard security headers to H
 - **Disabling/Modifying Headers:**
   The `attachSecurityHeaders` function returns the modified `Response` object. You can further modify headers on the returned object if needed, or update the `src/utils/response.ts` file to change default behaviors globally.
 
-## License
-
-We welcome contributions! Please see our [Developer Guide](./DEVELOPER_GUIDE.md) for detailed instructions on coding standards, testing procedures, and the pull request process.
-
 ## 📡 API Reference
 
 A description of the backend endpoints exposed under `/api` can be found in:
@@ -248,9 +242,18 @@ the backend.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
-Fork the repository and clone it to your local machine
-Create a new branch for your changes
-Make and test your updates following the project guidelines
-Commit and push your changes to your fork
-Open a Pull Request with a clear description
+## 🤝 Community & Contributing
+
+We welcome contributions! Please review our community guidelines before getting started:
+
+- **[Contributing Guidelines](./CONTRIBUTING.md)**: Details on branching, PR flow, and test expectations.
+- **[Code of Conduct](./CODE_OF_CONDUCT.md)**: Our expectations for community interactions.
+- **[Security Policy](./SECURITY.md)**: How to report vulnerabilities privately.
+- **[Developer Guide](./DEVELOPER_GUIDE.md)**: Instructions on local setup, testing, and architecture.
+
+### Quick Start
+1. Fork the repository and clone it to your local machine.
+2. Create a new branch for your changes.
+3. Make and test your updates following the project guidelines.
+4. Commit and push your changes to your fork.
+5. Open a Pull Request with a clear description.
