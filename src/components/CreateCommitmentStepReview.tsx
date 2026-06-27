@@ -261,7 +261,7 @@ export default function CreateCommitmentStepReview({
         </div>
 
         {/* Review Sections */}
-        <div className={styles.reviewSections}>
+        <div className={styles.reviewSections} data-testid="review-sections">
           {/* Type Section */}
           <section
             className={styles.reviewSection}
@@ -427,7 +427,7 @@ export default function CreateCommitmentStepReview({
         </div>
 
         {/* Checkboxes */}
-        <div className={styles.checkboxSection}>
+        <div className={styles.checkboxSection} data-testid="review-checkboxes">
           <div
             id="acceptedTerms"
             className={styles.checkboxRow}
@@ -517,6 +517,7 @@ export default function CreateCommitmentStepReview({
             disabled={!canSubmit}
             className={styles.createButton}
             aria-disabled={!canSubmit}
+            data-testid="create-commitment-submit"
           >
             {isSubmitting ? (
               <>

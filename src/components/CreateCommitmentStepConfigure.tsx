@@ -343,6 +343,7 @@ export default function CreateCommitmentStepConfigure({
               className={styles.advancedToggleButton}
               onClick={() => setShowAdvanced(!showAdvanced)}
               aria-expanded={showAdvanced}
+              data-testid="advanced-toggle"
             >
               <span>Advanced Risk Parameters</span>
               <svg
@@ -427,7 +428,7 @@ export default function CreateCommitmentStepConfigure({
           </div>
 
           {/* Derived Values */}
-          <div className={styles.derivedSection}>
+          <div className={styles.derivedSection} data-testid="derived-section">
             <div className={styles.derivedRow}>
               <span className={styles.derivedLabel}>Early Exit Penalty</span>
               <span className={styles.derivedValue}>{earlyExitPenalty}</span>
@@ -456,6 +457,7 @@ export default function CreateCommitmentStepConfigure({
             onClick={onNext}
             disabled={!canAdvance}
             aria-disabled={!canAdvance}
+            data-testid="configure-continue"
           >
             {serverValidating ? 'Validating…' : 'Continue'}
             {!serverValidating && (

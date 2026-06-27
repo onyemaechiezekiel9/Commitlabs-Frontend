@@ -63,6 +63,7 @@ export const userPreferencesSchema = z.object({
         .max(10)
         .regex(/^[a-z]{2,3}(-[A-Z]{2,3})?$/, 'language must be a valid BCP-47 tag (e.g. "en", "en-US")')
         .optional(),
+    seenWizardTour: z.boolean().optional(),
 });
 
 /** Shape returned/stored for a single wallet. */
@@ -75,6 +76,7 @@ export const DEFAULT_PREFERENCES: Required<UserPreferences> = {
     notificationCategories: { expiry: true, violation: true, health_check: true },
     theme: 'system',
     language: 'en',
+    seenWizardTour: false,
 };
 
 // ─── Storage Adapter Interface ───────────────────────────────────────────────
