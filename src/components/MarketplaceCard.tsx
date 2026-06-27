@@ -26,6 +26,9 @@ export interface MarketplaceCardProps {
   /** Called when user confirms a purchase. Receives the commitment id and
    *  must return (or resolve to) a tx hash string, or undefined on failure. */
   onPurchase?: (id: string) => Promise<string | undefined> | string | undefined;
+  compareSelected?: boolean;
+  compareDisabled?: boolean;
+  onCompareToggle?: () => void;
 }
 
 function clampScore(score: number) {
@@ -169,6 +172,25 @@ function DollarSignIcon() {
   );
 }
 
+function CompareIcon({ selected }: { selected: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M2 4H14M2 8H14M2 12H10"
+        stroke={selected ? "#0FF0FC" : "currentColor"}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function MarketplaceCardComponent({
   id,
   type,
@@ -185,6 +207,9 @@ function MarketplaceCardComponent({
   tradeHref,
   trustLevel,
   onPurchase,
+  compareSelected = false,
+  compareDisabled = false,
+  onCompareToggle,
 }: MarketplaceCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPurchaseSuccessOpen, setIsPurchaseSuccessOpen] = useState(false);
@@ -244,6 +269,31 @@ function MarketplaceCardComponent({
           <TypeIcon type={type} />
         </div>
         <div className="flex flex-col items-end gap-2">
+          {onCompareToggle && (
+            <button
+              type="button"
+              className={`focus-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors ${
+                compareSelected
+                  ? "border-[#0FF0FC]/50 bg-[#0FF0FC]/15 text-[#0FF0FC]"
+                  : compareDisabled
+                    ? "border-white/10 bg-white/[0.02] text-white/30 cursor-not-allowed"
+                    : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"
+              }`}
+              onClick={onCompareToggle}
+              disabled={compareDisabled && !compareSelected}
+              aria-pressed={compareSelected}
+              aria-label={
+                compareDisabled && !compareSelected
+                  ? `Compare limit reached. Cannot add ${id}`
+                  : compareSelected
+                    ? `Remove ${id} from compare`
+                    : `Add ${id} to compare`
+              }
+            >
+              <CompareIcon selected={compareSelected} />
+              {compareSelected ? "Comparing" : "Compare"}
+            </button>
+          )}
           <span
             className={`text-[12px] tracking-[0.02em] font-[650] px-3 py-2 rounded-full ${badgeClass}`}
           >
