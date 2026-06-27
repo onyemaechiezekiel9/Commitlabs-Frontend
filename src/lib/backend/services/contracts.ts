@@ -167,6 +167,7 @@ function getNetworkPassphrase(): string {
   return getBackendConfig().networkPassphrase;
 }
 
+
 function getContractId(kind: "commitmentCore" | "attestationEngine"): string {
   const config = getBackendConfig();
   if (kind === "commitmentCore") {
@@ -191,6 +192,7 @@ function getSourcePublicKey(): string | null {
 
   return process.env.SOROBAN_SOURCE_ACCOUNT || null;
 }
+
 
 function getSorobanServer(): SorobanRpc.Server {
   const url = getRpcUrl();
