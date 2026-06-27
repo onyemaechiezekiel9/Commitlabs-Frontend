@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { NotificationSection } from '@/components/settings/NotificationSection'
 import { NotificationToggle } from '@/components/settings/NotificationToggle'
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { AppShellLayout } from '@/components/shell/AppShellLayout'
 import { AccountWalletSection } from '@/components/settings/AccountWalletSection'
 import { 
@@ -28,6 +29,7 @@ export default function SettingsPage() {
   })
 
   const [isSaving, setIsSaving] = useState(false)
+  const { isDirty, resetBaseline } = useUnsavedChangesGuard(preferences);
   const [showSuccess, setShowSuccess] = useState(false)
 
   const handleToggle = (key: keyof typeof preferences) => {
@@ -40,6 +42,7 @@ export default function SettingsPage() {
     setTimeout(() => {
       setIsSaving(false)
       setShowSuccess(true)
+      resetBaseline();
       setTimeout(() => setShowSuccess(false), 3000)
     }, 1000)
   }
@@ -69,6 +72,7 @@ export default function SettingsPage() {
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl mb-4 bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
             Settings
           </h1>
+          {isDirty && <span className="ml-2 px-2 py-1 bg-yellow-500 text-black text-sm rounded">Unsaved changes</span>}
           <p className="text-lg text-white/50 max-w-2xl leading-relaxed">
             Manage your account, wallet, and notification preferences.
           </p>
@@ -199,7 +203,7 @@ export default function SettingsPage() {
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || !isDirty}
             className={`
               w-full sm:w-auto flex items-center justify-center gap-2 px-10 py-3.5 rounded-xl font-bold transition-all active:scale-[0.98]
               ${isSaving 
