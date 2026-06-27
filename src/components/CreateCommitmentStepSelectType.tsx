@@ -22,6 +22,7 @@ interface CreateCommitmentStepSelectTypeProps {
   onSelectType: (type: 'safe' | 'balanced' | 'aggressive') => void;
   onNext: (type: 'safe' | 'balanced' | 'aggressive') => void;
   onBack: () => void;
+  initialFocusField?: string;
 }
 
 const commitmentTypes: CommitmentType[] = [
@@ -68,12 +69,23 @@ export default function CreateCommitmentStepSelectType({
   onSelectType,
   onNext,
   onBack,
+  initialFocusField,
 }: CreateCommitmentStepSelectTypeProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (initialFocusField) {
+      const element = document.getElementById(initialFocusField);
+      if (element) {
+        element.focus();
+        element.scrollIntoView({ block: 'center' });
+      }
+    }
+  }, [initialFocusField]);
 
   const handleContinue = () => {
     if (selectedType) {
@@ -105,7 +117,14 @@ export default function CreateCommitmentStepSelectType({
           </p>
         </div>
 
-        <div className={styles.cardsContainer} role="radiogroup" aria-label="Commitment type">
+        <div
+          id="commitment-type-container"
+          className={styles.cardsContainer}
+          role="radiogroup"
+          aria-label="Commitment type"
+          tabIndex={-1}
+          style={{ outline: 'none' }}
+        >
           {commitmentTypes.map((type) => {
             const Icon = type.icon;
             const isSelected = selectedType === type.id;

@@ -30,6 +30,7 @@ interface CreateCommitmentStepConfigureProps {
   onNext: () => void
   amountError?: string
   maxLossWarning?: boolean
+  initialFocusField?: string
 }
 
 // Per-type constraints surfaced as copy
@@ -54,8 +55,19 @@ export default function CreateCommitmentStepConfigure({
   onNext,
   amountError,
   maxLossWarning = false,
+  initialFocusField,
 }: CreateCommitmentStepConfigureProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (initialFocusField) {
+      const element = document.getElementById(initialFocusField);
+      if (element) {
+        element.focus();
+        element.scrollIntoView({ block: 'center' });
+      }
+    }
+  }, [initialFocusField]);
+
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [slippageTolerance, setSlippageTolerance] = useState(1)
   const [liquidationBuffer, setLiquidationBuffer] = useState(5)

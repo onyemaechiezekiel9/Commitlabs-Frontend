@@ -25,6 +25,7 @@ export default function CreateCommitment() {
   const router = useRouter();
   const { address: ownerAddress } = useWallet();
   const [step, setStep] = useState(1);
+  const [initialFocusField, setInitialFocusField] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<CommitmentType | null>(null);
   const [commitmentType, setCommitmentType] =
     useState<CommitmentType>("balanced");
@@ -162,7 +163,12 @@ export default function CreateCommitment() {
 
   const commitmentExplorerUrl = buildExplorerUrl("tx", commitmentId, "testnet");
 
-  const handleEditStep = (targetStep: 1 | 2) => {
+  const handleEditStep = (targetStep: 1 | 2, fieldId?: string) => {
+    if (fieldId) {
+      setInitialFocusField(fieldId);
+    } else {
+      setInitialFocusField(null);
+    }
     setStep(targetStep);
   };
 
@@ -174,6 +180,7 @@ export default function CreateCommitment() {
           onSelectType={handleSelectType}
           onNext={handleNextStep}
           onBack={handleBack}
+          initialFocusField={initialFocusField || undefined}
         />
       )}
 
@@ -196,6 +203,7 @@ export default function CreateCommitment() {
           onNext={handleNextStep}
           amountError={amountError}
           maxLossWarning={maxLossWarning}
+          initialFocusField={initialFocusField || undefined}
         />
       )}
 
