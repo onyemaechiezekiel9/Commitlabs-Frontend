@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { StrKey } from "@stellar/stellar-sdk";
 import { PARAMETER_BOUNDS, SUPPORTED_ASSETS } from "./config";
-import { ValidationError } from "./errors";
 
 // ─── Warning types ────────────────────────────────────────────────────────────
 
@@ -46,71 +45,11 @@ export class ValidationError extends Error {
 
 export interface PaginationParams {
   page: number;
-  limit: number;
+  pageSize: number;
+  offset: number;
 }
 
-export interface FilterParams {
-  [key: string]: string | number | boolean | undefined;
-}
 
-const addressSchema = z
-  .string()
-  .refine((addr) => StrKey.isValidEd25519PublicKey(addr), {
-    message: "Invalid Stellar address format",
-  });
-
-const amountSchema = z.union([z.string(), z.number()]).transform((val) => {
-  const num = typeof val === "string" ? parseFloat(val) : val;
-  if (isNaN(num) || num <= 0) {
-    throw new Error("Amount must be a positive number");
-  }
-  return num;
-});
-
-const paginationSchema = z
-  .object({
-    page: z
-      .union([z.string(), z.number()])
-      .optional()
-      .default(1)
-      .transform((val) => {
-        const num = typeof val === "string" ? parseInt(val, 10) : val;
-        if (isNaN(num) || num < 1) {
-          throw new Error("Page must be a positive integer");
-        }
-        return num;
-      }),
-    limit: z
-      .union([z.string(), z.number()])
-      .optional()
-      .default(10)
-      .transform((val) => {
-        const num = typeof val === "string" ? parseInt(val, 10) : val;
-        if (isNaN(num) || num < 1 || num > 100) {
-          throw new Error("Limit must be between 1 and 100");
-        }
-        return num;
-      }),
-  })
-  .transform((data) => ({
-    page: data.page,
-    limit: data.limit,
-  }));
-
-export const createCommitmentSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().min(1, "Description is required"),
-  amount: amountSchema,
-  creatorAddress: addressSchema,
-});
-
-export const createMarketplaceListingSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
-  price: amountSchema,
-  category: z.string().min(1, "Category is required"),
-  sellerAddress: addressSchema,
-});
 
 const DisputeReasonSchema = z.object({
     reason: z.string().min(1, "Dispute reason is required").max(500, "Reason must be 500 characters or less"),
@@ -125,11 +64,6 @@ const ResolveDisputeSchema = z.object({
 export { DisputeReasonSchema, ResolveDisputeSchema };
 export type DisputeReasonInput = z.infer<typeof DisputeReasonSchema>;
 export type ResolveDisputeInput = z.infer<typeof ResolveDisputeSchema>;
-export interface PaginationParams {
-  page: number;
-  limit: number;
-}
-
 export type FilterParams = Record<string, string | number | boolean>;
 
 const addressSchema = z
@@ -348,8 +282,6 @@ export type CreateCommitmentInput = z.infer<typeof createCommitmentSchema>;
 export type CreateMarketplaceListingInput = z.infer<
   typeof createMarketplaceListingSchema
 >;
-type FilterParams = Record<string, string | number | boolean>;
-
 // Validate Stellar address
 export function validateAddress(address: string): string {
   try {
@@ -437,24 +369,6 @@ export function validateSupportedAsset(
  * @example
  * z.object({ ownerAddress: stellarAddressSchema })
  */
-export { addressSchema as stellarAddressSchema };
-
-// Backwards-compatible alias expected by some modules/tests
-export const addressSchema = stellarAddressSchema;
-
-// Amount schema: accept number or numeric string and coerce to number
-const amountSchema = z.union([z.number(), z.string()]).transform((v) => {
-  const n = typeof v === 'string' ? parseFloat(v) : v;
-  if (typeof n !== 'number' || Number.isNaN(n)) throw new z.ZodError([]);
-  return n;
-}).refine((n) => n > 0, { message: 'Amount must be a positive number' });
-
-// Simple pagination schema
-const paginationSchema = z.object({
-  page: z.number().int().min(1).optional(),
-  limit: z.number().int().min(1).optional(),
-});
-
 // Validate amount (positive number, can be string or number)
 export function validateAmount(amount: string | number): number {
   try {

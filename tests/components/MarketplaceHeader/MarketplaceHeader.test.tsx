@@ -1,15 +1,17 @@
+// @vitest-environment happy-dom
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
 import { MarketplaceHeader } from '../../../src/components/MarketplaceHeader/MarketplaceHeader';
 
 // Mock fetch for stats endpoint
-global.fetch = jest.fn(() =>
+global.fetch = vi.fn(() =>
   Promise.resolve({
     ok: true,
     json: () => Promise.resolve({ activeListings: 12, averageYield: 5.2, medianPrice: 1500 }),
   })
-) as jest.Mock;
+);
 
 describe('MarketplaceHeader', () => {
   test('renders stats after fetch', async () => {
