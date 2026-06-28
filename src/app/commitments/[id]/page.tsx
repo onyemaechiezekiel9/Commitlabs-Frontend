@@ -188,6 +188,10 @@ export default function CommitmentDetailPage({
         setEarlyExitModalOpen(true);
     }, []);
 
+    const handleSettle = useCallback(() => {
+        console.log('Settle clicked for commitment', commitment.id);
+    }, [commitment.id]);
+
     return (
         <CommitmentStatusProvider commitmentId={commitment.id}>
             <main id="main-content" className="min-h-screen bg-[#050505] text-[#f5f5f7] p-4 sm:p-8 lg:p-12">
@@ -278,6 +282,8 @@ export default function CommitmentDetailPage({
                                 onViewAttestations={handleViewAttestations}
                                 onExportData={handleExportData}
                                 onReportIssue={handleReportIssue}
+                                onSettle={handleSettle}
+                                commitmentId={commitment.id}
                             />
                         </div>
                     </div>
@@ -350,14 +356,19 @@ function CommitmentDetailActionsUsingContext({
     onViewAttestations,
     onExportData,
     onReportIssue,
+    onSettle,
+    commitmentId,
 }: {
     onEarlyExit: () => void;
     onViewAttestations: () => void;
     onExportData: () => void;
     onReportIssue: () => void;
+    onSettle?: () => void;
+    commitmentId?: string;
 }) {
     const { status } = useCommitmentStatus();
     const canEarlyExit = status ? (status.status.toLowerCase() === 'active' && status.daysRemaining > 0) : false;
+    const previewRefreshTrigger = status ? `${status.status}:${status.expiresAt ?? 'none'}` : 'loading';
     
     return (
         <CommitmentDetailActions
@@ -366,6 +377,9 @@ function CommitmentDetailActionsUsingContext({
             onViewAttestations={onViewAttestations}
             onExportData={onExportData}
             onReportIssue={onReportIssue}
+            onSettle={onSettle}
+            commitmentId={commitmentId}
+            previewRefreshTrigger={previewRefreshTrigger}
         />
     );
 }
