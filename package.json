@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "deadcode": "knip",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
@@ -15,7 +16,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-
     "@stellar/freighter-api": "^1.6.0",
     "@stellar/stellar-sdk": "^11.2.2",
     "@tailwindcss/postcss": "^4.1.18",
@@ -49,6 +49,7 @@
     "happy-dom": "^20.7.0",
     "ioredis": "^5.11.0",
     "jsdom": "^29.1.1",
+    "knip": "^6.23.0",
     "node-fetch": "^3.3.2",
     "tsx": "^4.21.0",
     "typescript": "^5.0.0",

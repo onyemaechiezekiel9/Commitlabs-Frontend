@@ -49,6 +49,7 @@ Welcome to the CommitLabs documentation index. This document serves as a single 
 
 ## 🔒 Security, Audit & Threats
 - **[audit/AUDIT.md](audit/AUDIT.md)** — Dead code search, TODO registry, and linting status audit documentation.
+- **[DEAD_CODE_SCAN.md](DEAD_CODE_SCAN.md)** — Automated unused files/exports/deps scan with knip: config, how to read the report, and triage.
 - **[backend-security-checklist.md](backend-security-checklist.md)** — API route protection, payload limits, sanitization, and compliance guidelines.
 - **[backend-threat-model.md](backend-threat-model.md)** — Analysis of security vectors, Stellar transaction replay attacks, and state vulnerabilities.
 - **[backend-session-csrf.md](backend-session-csrf.md)** — Anti-CSRF token handling and validation for state-modifying endpoints.
