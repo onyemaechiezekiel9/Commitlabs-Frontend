@@ -102,8 +102,9 @@ export default function CommitmentCreatedModal({
 
       if (focusableElements.length === 0) return;
 
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
+      const firstElement = focusableElements[0] as HTMLElement | undefined;
+      const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
+      if (!firstElement || !lastElement) return;
 
       if (event.shiftKey && document.activeElement === firstElement) {
         event.preventDefault();

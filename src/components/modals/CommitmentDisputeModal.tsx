@@ -104,8 +104,9 @@ export default function CommitmentDisputeModal({
 
     if (focusableElements.length === 0) return;
 
-    const first = focusableElements[0];
-    const last = focusableElements[focusableElements.length - 1];
+    const first = focusableElements[0] as HTMLElement | undefined;
+    const last = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
+    if (!first || !last) return;
 
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
