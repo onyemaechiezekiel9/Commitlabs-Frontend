@@ -12,7 +12,15 @@
     "test:coverage": "vitest --coverage",
     "test:contracts:deploy": "node contracts/scripts/deploy-testnet.smoke.mjs",
     "seed:mock": "tsx scripts/seed-backend-mock.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "bash -c 'tsc --noEmit'"
+    ]
   },
   "dependencies": {
 
@@ -47,7 +55,9 @@
     "eslint": "^8.0.0",
     "eslint-config-next": "^14.0.0",
     "happy-dom": "^20.7.0",
+    "husky": "^9.1.7",
     "ioredis": "^5.11.0",
+    "lint-staged": "^15.2.10",
     "jsdom": "^29.1.1",
     "node-fetch": "^3.3.2",
     "tsx": "^4.21.0",
