@@ -58,42 +58,23 @@ This project uses **Vitest** for unit and integration testing of API routes.
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run tests in watch mode (re-runs on file changes)
-npm run test:watch
+pnpm run test:watch
 
 # Run tests with coverage report
-npm run test:coverage
+pnpm run test:coverage
 ```
 
-### Test Structure
+**Coverage Requirements**: The project enforces a **95% threshold** on statements, branches, functions, and lines.
 
-Tests are organized in the `tests/` directory:
-
-```
-tests/
-└── api/
-    ├── helpers.ts           # Test utilities and mock request helpers
-    ├── health.test.ts       # Tests for /api/health route
-    └── commitments.test.ts  # Tests for /api/commitments route
-```
-
-### API Routes
-
-- **GET /api/health** - Health check endpoint returning status and version
-- **GET /api/commitments** - Fetch commitments with optional filtering and pagination
-- **POST /api/commitments** - Create a new commitment (mocked for now)
-
-### Test Examples
-
-Tests demonstrate:
-- Mocking Next.js API routes without network requests
-- Testing request/response handling
-- Parameter validation and error handling
-- Mock data without external dependencies
-
-To add new API route tests, create a `.test.ts` file in `tests/api/` following the same pattern.
+**For detailed testing conventions, patterns, and best practices**, see **[TESTING_GUIDE.md](./docs/TESTING_GUIDE.md)**, which covers:
+- Mocking fetch and external APIs
+- Mocking the Freighter wallet API
+- Using fake timers for async testing
+- React Testing Library patterns and accessibility-first queries
+- Test organization and naming conventions
 
 ## 🔄 Backend API Changelog
 
