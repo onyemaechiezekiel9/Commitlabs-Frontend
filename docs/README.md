@@ -48,6 +48,7 @@ Welcome to the CommitLabs documentation index. This document serves as a single 
 - **[hero-section-design.md](hero-section-design.md)** — Call-to-action layout, copy patterns, and spacing specifications for the home hero block.
 
 ## 🔒 Security, Audit & Threats
+- **[security/EXTERNAL_LINKS.md](security/EXTERNAL_LINKS.md)** — External-link & subresource policy: required `rel` on `target=_blank`, the ESLint guard, the allow-listed hosts, and the safe explorer-link helper.
 - **[audit/AUDIT.md](audit/AUDIT.md)** — Dead code search, TODO registry, and linting status audit documentation.
 - **[backend-security-checklist.md](backend-security-checklist.md)** — API route protection, payload limits, sanitization, and compliance guidelines.
 - **[backend-threat-model.md](backend-threat-model.md)** — Analysis of security vectors, Stellar transaction replay attacks, and state vulnerabilities.
