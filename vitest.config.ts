@@ -1,9 +1,7 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
-  oxc: false,
   test: {
     globals: true,
     setupFiles: ['./tests/setup/vitest.setup.ts'],
@@ -13,11 +11,16 @@ export default defineConfig({
       all: false,
       reporter: ['text', 'json', 'html'],
       include: [
-        'src/lib/backend/csrf.ts',
-        'src/lib/backend/env.ts',
-        'src/lib/backend/parsing.ts',
-        'src/lib/backend/session.ts',
-        'src/lib/backend/validationErrors.ts',
+        'src/lib/backend/auditLog.ts',
+        'src/lib/backend/cors.ts',
+        'src/lib/backend/withApiHandler.ts',
+        'src/lib/backend/apiResponse.ts',
+        'src/app/api/health/route.ts',
+        'src/app/api/metrics/route.ts',
+        'src/app/api/marketplace/listings/route.ts',
+        'src/app/api/marketplace/listings/[id]/route.ts',
+        'src/app/api/commitments/route.ts',
+        'src/app/api/commitments/search/route.ts',
       ],
       exclude: [
         'node_modules/',
