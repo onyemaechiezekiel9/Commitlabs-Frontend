@@ -11,6 +11,7 @@ Welcome to the CommitLabs documentation index. This document serves as a single 
 - **[todo/TODO.md](todo/TODO.md)** — Tracked checklist for self-hosting fonts performance feature.
 
 ## 🏗 Architecture & Design Systems
+- **[adr/README.md](adr/README.md)** — Architecture Decision Records: the *why* behind cross-cutting decisions, plus the template and process for adding new ones.
 - **[ARCHITECTURE.md](../ARCHITECTURE.md)** (Root) — Global system design, modules, and soroban contract data flow.
 - **[FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)** — Page routes mapping to React components and API routes, including wallet/auth state design.
 - **[MODAL_SYSTEM.md](MODAL_SYSTEM.md)** — Architecture of the modal managers, custom context triggers, and backdrop animations.
