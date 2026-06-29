@@ -70,6 +70,7 @@ Welcome to the CommitLabs documentation index. This document serves as a single 
 
 ## ♿ Accessibility & Performance
 - **[accessibility/ACCESSIBILITY_STATEMENT.md](accessibility/ACCESSIBILITY_STATEMENT.md)** — Overall WCAG 2.1 AA target, current conformance posture, known gaps, and how to report accessibility problems.
+- **[PERFORMANCE_BUDGET.md](PERFORMANCE_BUDGET.md)** — Core Web Vitals budget (LCP/CLS/INP), the field web-vitals reporting pipeline, and regression triage.
 - **[accessibility-dense-ui.md](accessibility-dense-ui.md)** — Layout rules and size considerations for data-dense tables.
 - **[accessibility/CONTRAST_AUDIT.md](accessibility/CONTRAST_AUDIT.md)** — Verification report on text color contrast ratios.
 - **[accessibility/CREATE_WIZARD_A11Y.md](accessibility/CREATE_WIZARD_A11Y.md)** — Keyboard controls, screen-reader descriptions, and aria labels for form steps.

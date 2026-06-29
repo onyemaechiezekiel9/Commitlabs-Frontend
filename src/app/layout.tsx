@@ -7,6 +7,7 @@ import { CommandPaletteProvider } from "@/components/CommandPalette"
 import { NetworkMismatchBanner } from "@/components/wallet/NetworkMismatchBanner"
 import { Inter, Roboto_Mono } from 'next/font/google'
 import { MotionProvider } from "@/components/MotionProvider"
+import { WebVitalsReporter } from "@/components/perf/WebVitalsReporter"
 
 const inter = Inter({
   subsets: ['latin'],
@@ -99,6 +100,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <WebVitalsReporter />
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <ThemeProvider>
           <MotionProvider>
