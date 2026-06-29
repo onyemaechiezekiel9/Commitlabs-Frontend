@@ -57,6 +57,7 @@ Welcome to the CommitLabs documentation index. This document serves as a single 
 - **[backend-session-csrf.md](backend-session-csrf.md)** — Anti-CSRF token handling and validation for state-modifying endpoints.
 
 ## 🧪 Testing & Verification
+- **[testing/FIXTURES.md](testing/FIXTURES.md)** — Index of shared test data (factories, API helpers, mock DB/seed) and the naming conventions for adding fixtures.
 - **[testing/test-auth.md](testing/test-auth.md)** — Step-by-step verification flows for wallet authentication and signature verification APIs.
 - **[testing/test-settle.md](testing/test-settle.md)** — Verification procedures, payloads, and mock responses for the commitment settlement API.
 - **[testing/EXPORT_MODAL_TESTS.md](testing/EXPORT_MODAL_TESTS.md)** — Testing plan for the data export/download dialog interface.
